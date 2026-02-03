@@ -1,0 +1,14 @@
+env: production
+debug: false
+
+parsing:
+  strategy: layout_aware
+  table_integrity_threshold: 0.85
+
+retrieval:
+  top_k: 10
+  rerank: true
+
+model:
+  llm: gpt-4o
+  embedding: text-embedding-3-large

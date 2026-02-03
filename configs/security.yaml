@@ -1,0 +1,11 @@
+input_rail:
+  block_prompt_injection: true
+  injection_threshold: 0.9
+
+process_rail:
+  pii_masking: true
+  allowed_domains: ["*"]
+
+output_rail:
+  block_unsafe_content: true
+  force_evidence_citation: true

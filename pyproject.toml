@@ -1,0 +1,44 @@
+[project]
+name = "bidflow"
+version = "0.1.0"
+description = "Security-First RAG Intelligent Bidding Analysis System"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "streamlit",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "pyyaml",
+    "langchain",
+    "langchain-core",
+    "langchain-openai",
+    "chromadb",
+    "faiss-cpu",
+    "ragas",
+    "boto3",
+    "tiktoken",
+    "requests",
+    "pandas",
+    "pdfplumber",
+    "openpyxl",
+    "python-docx"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "isort",
+    "mypy",
+    "ruff"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
