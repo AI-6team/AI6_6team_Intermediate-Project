@@ -1,44 +1,35 @@
 [project]
 name = "bidflow"
 version = "0.1.0"
-description = "Security-First RAG Intelligent Bidding Analysis System"
-readme = "README.md"
-requires-python = ">=3.10"
+description = "AI-powered RFP Analysis System"
+authors = [
+    {name = "AI6_6team", email = "team@example.com"},
+]
 dependencies = [
-    "fastapi",
-    "uvicorn",
-    "streamlit",
-    "pydantic",
-    "pydantic-settings",
-    "python-dotenv",
-    "pyyaml",
-    "langchain",
-    "langchain-core",
-    "langchain-openai",
-    "chromadb",
-    "faiss-cpu",
-    "ragas",
-    "boto3",
-    "tiktoken",
-    "requests",
-    "pandas",
-    "pdfplumber",
-    "openpyxl",
-    "python-docx"
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "python-multipart>=0.0.6",
+    "streamlit>=1.30.0",
+    "langchain>=0.1.0",
+    "langchain-openai>=0.0.1",
+    "langchain-chroma>=0.1.0",
+    "langfuse>=2.0.0",
+    "chromadb>=0.4.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "pymupdf>=1.23.0",
+    "pdfplumber>=0.10.0",
+    "httpx>=0.26.0",
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "olefile>=0.46",
+    "pyhwp>=0.1b17",
+    "ragas>=0.2.0",
+    "datasets>=2.14.0",
+    "sentence-transformers>=2.0.0",
+    "python-docx>=1.0.0",
+    "pyyaml>=6.0",
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "black",
-    "isort",
-    "mypy",
-    "ruff"
-]
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["src"]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}

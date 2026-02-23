@@ -1,0 +1,180 @@
+{
+  "meta": {
+    "experiment": "Exp-04 Integrated Pipeline Enhancement (V3)",
+    "version": "v3",
+    "date": "2026-02-10T21:32:34.803406",
+    "sample_file": "../data/raw/files/고려대학교_차세대 포털·학사 정보시스템 구축사업.pdf",
+    "num_test_cases": 30,
+    "prerequisite": {
+      "exp01v2_config": "T+M",
+      "chunk_size": 500,
+      "alpha": 0.5,
+      "top_k": 15,
+      "gen_model": "gpt-5-mini",
+      "util_model": "gpt-4o-mini"
+    },
+    "fact_sheet": {
+      "사업명": "고려대학교 차세대 포털·학사 정보시스템 구축 사업",
+      "발주처": "고려대학교",
+      "사업기간": "계약일로부터 24개월 이내",
+      "사업예산": "11,270,000,000원 (V.A.T 포함, 3년 분할 지급)",
+      "입찰방식": "제한 경쟁 입찰(협상에 의한 계약)"
+    },
+    "run_config": {
+      "timeout": 300,
+      "max_workers": 2
+    }
+  },
+  "best_config": {
+    "config": "C_verbatim",
+    "description": "+Verbatim Prompt",
+    "keyword_accuracy": 0.6640141835575271,
+    "faithfulness": 0.8286724554309183,
+    "context_recall": 0.7,
+    "answer_relevancy": 0.5111091750799811
+  },
+  "v2_comparison": {
+    "faithfulness_v2": 0.9523690932311621,
+    "faithfulness_v3": 0.8286724554309183,
+    "faithfulness_delta": -0.12369663780024387,
+    "keyword_accuracy_v2": 0.4921943990248944,
+    "keyword_accuracy_v3": 0.6640141835575271,
+    "keyword_accuracy_delta": 0.17181978453263264,
+    "context_recall_v2": 0.7333333333333333,
+    "context_recall_v3": 0.7,
+    "context_recall_delta": -0.033333333333333326,
+    "answer_relevancy_v2": 0.4132632581495239,
+    "answer_relevancy_v3": 0.5111091750799811,
+    "answer_relevancy_delta": 0.09784591693045719
+  },
+  "ablation_deltas": [
+    {
+      "config": "A_baseline",
+      "description": "V2 Baseline (zero_shot_ko)",
+      "keyword_accuracy": 0.44303294257628617,
+      "keyword_accuracy_delta": 0.0,
+      "faithfulness": 0.9882572362278244,
+      "faithfulness_delta": 0.0,
+      "context_recall": 0.7666666666666667,
+      "context_recall_delta": 0.0
+    },
+    {
+      "config": "B_metadata",
+      "description": "+Document Metadata",
+      "keyword_accuracy": 0.5849142557075993,
+      "keyword_accuracy_delta": 0.14188131313131308,
+      "faithfulness": 0.8101210011191238,
+      "faithfulness_delta": -0.17813623510870058,
+      "context_recall": 0.6857142857142856,
+      "context_recall_delta": -0.08095238095238111
+    },
+    {
+      "config": "C_verbatim",
+      "description": "+Verbatim Prompt",
+      "keyword_accuracy": 0.6640141835575271,
+      "keyword_accuracy_delta": 0.07909992784992781,
+      "faithfulness": 0.8286724554309183,
+      "faithfulness_delta": 0.018551454311794502,
+      "context_recall": 0.7,
+      "context_recall_delta": 0.014285714285714346
+    },
+    {
+      "config": "D_reranker",
+      "description": "+LLM Reranker",
+      "keyword_accuracy": 0.6517055934548194,
+      "keyword_accuracy_delta": -0.012308590102707684,
+      "faithfulness": 0.8518183642085122,
+      "faithfulness_delta": 0.023145908777593927,
+      "context_recall": 0.7666666666666667,
+      "context_recall_delta": 0.06666666666666676
+    },
+    {
+      "config": "E_decompose",
+      "description": "+Query Decomposition",
+      "keyword_accuracy": 0.5863299384081117,
+      "keyword_accuracy_delta": -0.06537565504670773,
+      "faithfulness": 0.8722139908595016,
+      "faithfulness_delta": 0.020395626650989374,
+      "context_recall": 0.7666666666666667,
+      "context_recall_delta": 0.0
+    },
+    {
+      "config": "F_full",
+      "description": "+Relevance Grading (Full)",
+      "keyword_accuracy": 0.6155084495254772,
+      "keyword_accuracy_delta": 0.02917851111736558,
+      "faithfulness": 0.8444269106653006,
+      "faithfulness_delta": -0.027787080194200953,
+      "context_recall": 0.7023809523809523,
+      "context_recall_delta": -0.06428571428571439
+    }
+  ],
+  "results": [
+    {
+      "config": "A_baseline",
+      "description": "V2 Baseline (zero_shot_ko)",
+      "faithfulness": 0.9882572362278244,
+      "answer_relevancy": 0.39098914496326587,
+      "context_recall": 0.7666666666666667,
+      "keyword_accuracy": 0.44303294257628617,
+      "gen_time": 366.53062249999493,
+      "ragas_time": 1191.478611700004,
+      "latency_total": 1558.0097597000422
+    },
+    {
+      "config": "B_metadata",
+      "description": "+Document Metadata",
+      "faithfulness": 0.8101210011191238,
+      "answer_relevancy": 0.4908859637199507,
+      "context_recall": 0.6857142857142856,
+      "keyword_accuracy": 0.5849142557075993,
+      "gen_time": 338.7238645000034,
+      "ragas_time": 1253.8798854999477,
+      "latency_total": 1592.604106999992
+    },
+    {
+      "config": "C_verbatim",
+      "description": "+Verbatim Prompt",
+      "faithfulness": 0.8286724554309183,
+      "answer_relevancy": 0.5111091750799811,
+      "context_recall": 0.7,
+      "keyword_accuracy": 0.6640141835575271,
+      "gen_time": 407.87993330002064,
+      "ragas_time": 1352.1536951999879,
+      "latency_total": 1760.034141000011
+    },
+    {
+      "config": "D_reranker",
+      "description": "+LLM Reranker",
+      "faithfulness": 0.8518183642085122,
+      "answer_relevancy": 0.5423049766393511,
+      "context_recall": 0.7666666666666667,
+      "keyword_accuracy": 0.6517055934548194,
+      "gen_time": 585.8044881999958,
+      "ragas_time": 1201.7798331000376,
+      "latency_total": 1787.5848414000357
+    },
+    {
+      "config": "E_decompose",
+      "description": "+Query Decomposition",
+      "faithfulness": 0.8722139908595016,
+      "answer_relevancy": 0.49786557436526474,
+      "context_recall": 0.7666666666666667,
+      "keyword_accuracy": 0.5863299384081117,
+      "gen_time": 685.0632926000399,
+      "ragas_time": 1273.1954241999774,
+      "latency_total": 1958.2592422000016
+    },
+    {
+      "config": "F_full",
+      "description": "+Relevance Grading (Full)",
+      "faithfulness": 0.8444269106653006,
+      "answer_relevancy": 0.5136293033688878,
+      "context_recall": 0.7023809523809523,
+      "keyword_accuracy": 0.6155084495254772,
+      "gen_time": 795.9164552000002,
+      "ragas_time": 1254.7915383999934,
+      "latency_total": 2050.708575900004
+    }
+  ]
+}

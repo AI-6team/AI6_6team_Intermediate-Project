@@ -1,0 +1,25 @@
+# Decision Engine Rules (ported from 김보윤)
+# Signal-based bid/no-bid recommendation
+#
+# Signals: green (positive), yellow (caution), red (negative)
+#
+# 임계값 기준: data_list.csv 100개 문서 예산 분포
+#   10%ile: 4,380만  25%ile: 7,000만  중앙값: 1.73억
+#   75%ile: 4.06억   90%ile: 10.19억  최대: 141억
+
+budget:
+  min_acceptable: 30000000        # 3천만 원 미만 -> yellow (극소형 사업)
+  too_large: 5000000000           # 50억 초과 -> yellow (대형 리스크, 상위 ~5%)
+
+deadline:
+  min_days_critical: 7            # 7일 미만 -> red
+  min_days_caution: 14            # 14일 미만 -> yellow
+
+info_completeness:
+  max_missing_yellow: 2           # 2개 초과 -> yellow
+  max_missing_red: 4              # 4개 초과 -> red
+
+aggregation:
+  any_red: "참여 보류"
+  any_yellow: "검토 필요"
+  all_green: "참여 권장"

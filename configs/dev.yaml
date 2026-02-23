@@ -3,12 +3,18 @@ debug: true
 
 parsing:
   strategy: layout_aware
+  table_strategy: layout
+  chunk_size: 500
+  chunk_overlap: 50
   table_integrity_threshold: 0.7
 
 retrieval:
-  top_k: 5
-  rerank: false
+  top_k: 15
+  rerank: true
+  rerank_pool: 50
+  rerank_model: BAAI/bge-reranker-v2-m3
+  hybrid_alpha: 0.7
 
 model:
-  llm: gpt-4o
+  llm: gpt-5-mini
   embedding: text-embedding-3-small

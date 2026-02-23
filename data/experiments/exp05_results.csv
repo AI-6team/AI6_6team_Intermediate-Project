@@ -1,0 +1,6 @@
+phase,config,keyword_accuracy,faithfulness,context_recall,latency_sec
+prompt,P0_verbatim,0.6458,0.8872,0.8333,533.4
+prompt,P1_extract,0.6696,0.8389,0.8,551.0
+prompt,P2_evidence,0.4711,0.8637,0.8167,678.6
+reranker_cut,R0_fixed15,0.6508,0.8853,0.8,617.3
+reranker_cut,R1_elbow,0.7058,0.8355,0.8,555.4

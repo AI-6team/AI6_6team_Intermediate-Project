@@ -1,0 +1,16 @@
+phase,config,keyword_accuracy,context_recall,faithfulness,latency_sec
+reranker,R0_baseline,0.6254,0.6333,0.8247,328.5
+reranker,R1_rerank@30,0.6164,0.7476,0.8062,372.7
+reranker,R1_rerank@50,0.7194,0.9,0.9219,428.1
+reranker,R1_rerank@100,0.7036,0.9333,0.9591,1249.7
+reranker,R2_diversity@50,0.6916,0.9,0.9218,1160.6
+embedding,E0_openai_a0.3,0.6512,0.85,,367.2
+embedding,E0_openai_a0.5,0.7137,0.9,,373.3
+embedding,E0_openai_a0.7,0.7415,0.8333,,376.5
+embedding,E1_e5_large_a0.3,0.6833,0.9,,399.3
+embedding,E1_e5_large_a0.5,0.6932,0.9,,488.8
+embedding,E1_e5_large_a0.7,0.6734,0.9667,,436.1
+embedding,E2_kure_v1_a0.3,0.7126,0.9667,,450.1
+embedding,E2_kure_v1_a0.5,0.6823,0.9667,,455.9
+embedding,E2_kure_v1_a0.7,0.732,0.9667,,358.3
+bm25_tokenizer,B0_whitespace,0.6755,,,365.9

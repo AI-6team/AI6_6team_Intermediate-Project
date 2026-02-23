@@ -1,0 +1,287 @@
+{
+  "experiment": "exp10ce_parser_switch",
+  "phase": "CE",
+  "date": "2026-02-21T17:56:19.762381",
+  "testset": "golden_testset_multi.csv",
+  "n_questions": 30,
+  "n_documents": 5,
+  "n_runs": 3,
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "embedding_model": "text-embedding-3-small",
+  "llm_model": "gpt-5-mini",
+  "retrieval_params": {
+    "alpha": 0.7,
+    "top_k": 15,
+    "pool_size": 50,
+    "use_rerank": true
+  },
+  "total_time_sec": 3792.3,
+  "total_evals": 360,
+  "total_errors": 18,
+  "config_labels": [
+    "V0_hwp5txt",
+    "V1_html_basic",
+    "V2_html_table",
+    "V3_html_full"
+  ],
+  "results": {
+    "V0_hwp5txt": {
+      "kw_v2_overall": 0.7564,
+      "kw_v2_std": 0.2901,
+      "kw_v2_macro": 0.7564,
+      "kw_v2_worst": 0.6908,
+      "worst_doc": "doc_B",
+      "text_kw_v2": 0.9144,
+      "table_kw_v2": 0.717,
+      "text_table_gap": 0.1974,
+      "timeout_rate": 0.0,
+      "p95_latency_sec": 22.4,
+      "pass_floor_kw": "True",
+      "pass_floor_worst": "True",
+      "pass_ops": "True",
+      "pass_target_overall": "False",
+      "pass_target_table": "False",
+      "pass_target_gap": "False"
+    },
+    "V1_html_basic": {
+      "kw_v2_overall": 0.745,
+      "kw_v2_std": 0.2698,
+      "kw_v2_macro": 0.745,
+      "kw_v2_worst": 0.5953,
+      "worst_doc": "doc_D",
+      "text_kw_v2": 0.6389,
+      "table_kw_v2": 0.7715,
+      "text_table_gap": 0.1326,
+      "timeout_rate": 0.0,
+      "p95_latency_sec": 19.3,
+      "pass_floor_kw": "True",
+      "pass_floor_worst": "True",
+      "pass_ops": "True",
+      "pass_target_overall": "False",
+      "pass_target_table": "False",
+      "pass_target_gap": "False"
+    },
+    "V2_html_table": {
+      "kw_v2_overall": 0.7012,
+      "kw_v2_std": 0.313,
+      "kw_v2_macro": 0.7012,
+      "kw_v2_worst": 0.5045,
+      "worst_doc": "doc_D",
+      "text_kw_v2": 0.6343,
+      "table_kw_v2": 0.7179,
+      "text_table_gap": 0.0837,
+      "timeout_rate": 0.0,
+      "p95_latency_sec": 34.0,
+      "pass_floor_kw": "True",
+      "pass_floor_worst": "True",
+      "pass_ops": "True",
+      "pass_target_overall": "False",
+      "pass_target_table": "False",
+      "pass_target_gap": "True"
+    },
+    "V3_html_full": {
+      "kw_v2_overall": 0.7007,
+      "kw_v2_std": 0.3345,
+      "kw_v2_macro": 0.7007,
+      "kw_v2_worst": 0.5444,
+      "worst_doc": "doc_D",
+      "text_kw_v2": 0.6435,
+      "table_kw_v2": 0.7197,
+      "text_table_gap": 0.0762,
+      "timeout_rate": 0.0,
+      "p95_latency_sec": 18.8,
+      "pass_floor_kw": "True",
+      "pass_floor_worst": "True",
+      "pass_ops": "True",
+      "pass_target_overall": "False",
+      "pass_target_table": "False",
+      "pass_target_gap": "True"
+    }
+  },
+  "config_summary": {
+    "kw_v2_mean": {
+      "V0_hwp5txt": 0.7564,
+      "V1_html_basic": 0.745,
+      "V2_html_table": 0.7012,
+      "V3_html_full": 0.7007
+    },
+    "kw_v2_std": {
+      "V0_hwp5txt": 0.2901,
+      "V1_html_basic": 0.2698,
+      "V2_html_table": 0.313,
+      "V3_html_full": 0.3345
+    },
+    "total_time_mean": {
+      "V0_hwp5txt": 9.3921,
+      "V1_html_basic": 9.0374,
+      "V2_html_table": 16.1321,
+      "V3_html_full": 9.4361
+    },
+    "total_time_p95": {
+      "V0_hwp5txt": 22.4494,
+      "V1_html_basic": 19.2892,
+      "V2_html_table": 33.9701,
+      "V3_html_full": 18.7989
+    },
+    "timeout_rate": {
+      "V0_hwp5txt": 0.0,
+      "V1_html_basic": 0.0,
+      "V2_html_table": 0.0,
+      "V3_html_full": 0.0
+    }
+  },
+  "doc_pivot": {
+    "doc_A": {
+      "V0_hwp5txt": 0.9143518518518517,
+      "V1_html_basic": 0.6388888888888888,
+      "V2_html_table": 0.6342592592592592,
+      "V3_html_full": 0.6435185185185186
+    },
+    "doc_B": {
+      "V0_hwp5txt": 0.6907560295073194,
+      "V1_html_basic": 0.9670622635018921,
+      "V2_html_table": 0.9641382868937048,
+      "V3_html_full": 0.9637942896456829
+    },
+    "doc_C": {
+      "V0_hwp5txt": 0.7481481481481481,
+      "V1_html_basic": 0.8314814814814815,
+      "V2_html_table": 0.7481481481481481,
+      "V3_html_full": NaN
+    },
+    "doc_D": {
+      "V0_hwp5txt": 0.6945569050832208,
+      "V1_html_basic": 0.5952541610436347,
+      "V2_html_table": 0.504513420302894,
+      "V3_html_full": 0.5443544759334232
+    },
+    "doc_E": {
+      "V0_hwp5txt": 0.7343459222769568,
+      "V1_html_basic": 0.6922824302134647,
+      "V2_html_table": 0.6549808429118774,
+      "V3_html_full": 0.6510125889436235
+    },
+    "macro_mean": {
+      "V0_hwp5txt": 0.7564317713734994,
+      "V1_html_basic": 0.7449938450258724,
+      "V2_html_table": 0.7012079915031767,
+      "V3_html_full": 0.700669968260312
+    }
+  },
+  "targets": {
+    "overall_kw_v2": 0.8,
+    "table_kw_v2": 0.8,
+    "text_table_gap": 0.1
+  },
+  "errors": [
+    {
+      "config": "V3_html_full",
+      "run": 0,
+      "question": "차세대 응급의료 상황관리시스템 구축 사업의 사업예산은 얼마인가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 0,
+      "question": "차세대 응급의료 상황관리시스템의 사업기간은?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 0,
+      "question": "응급의료 상황관리시스템 구축의 추진배경에서 전원(병원간 이송) 관련 문제점은?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 0,
+      "question": "응급의료 상황관리시스템의 예산코드는 무엇인가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 0,
+      "question": "기존 응급의료 상황관리시스템은 언제 최초 구축되었는가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 0,
+      "question": "응급의료 시스템 구축에서 광역상황실 설치 결정의 근거는?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 1,
+      "question": "차세대 응급의료 상황관리시스템 구축 사업의 사업예산은 얼마인가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 1,
+      "question": "차세대 응급의료 상황관리시스템의 사업기간은?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 1,
+      "question": "응급의료 상황관리시스템 구축의 추진배경에서 전원(병원간 이송) 관련 문제점은?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 1,
+      "question": "응급의료 상황관리시스템의 예산코드는 무엇인가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 1,
+      "question": "기존 응급의료 상황관리시스템은 언제 최초 구축되었는가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 1,
+      "question": "응급의료 시스템 구축에서 광역상황실 설치 결정의 근거는?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 2,
+      "question": "차세대 응급의료 상황관리시스템 구축 사업의 사업예산은 얼마인가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 2,
+      "question": "차세대 응급의료 상황관리시스템의 사업기간은?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 2,
+      "question": "응급의료 상황관리시스템 구축의 추진배경에서 전원(병원간 이송) 관련 문제점은?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 2,
+      "question": "응급의료 상황관리시스템의 예산코드는 무엇인가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 2,
+      "question": "기존 응급의료 상황관리시스템은 언제 최초 구축되었는가?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    },
+    {
+      "config": "V3_html_full",
+      "run": 2,
+      "question": "응급의료 시스템 구축에서 광역상황실 설치 결정의 근거는?",
+      "error": "No chain for 국립중앙의료원_(긴급)「2024년도 차세대 응급의료 상황관리시스템 구축.hwp"
+    }
+  ]
+}

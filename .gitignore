@@ -40,6 +40,7 @@ env/
 # OS metadata
 .DS_Store
 Thumbs.db
+nul
 
 # Testing & Coverage
 .pytest_cache/
@@ -55,10 +56,11 @@ logs/
 # Streamlit
 .streamlit/secrets.toml
 
-# AI/ML Models & Vector DBs (if stored locally)
+# AI/ML Models & Vector DBs
 *.pt
 *.pth
 *.gguf
+*.sqlite3
 chroma_db/
 faiss_index/
 
@@ -75,3 +77,24 @@ data/eval/gold/*
 !data/eval/gold/.gitkeep
 data/eval/synthetic/*
 !data/eval/synthetic/.gitkeep
+
+# Experiment VectorDB & binary data (keep CSV/JSON/PNG results)
+data/chroma_exp/
+data/vectordb/
+data/exp10b/
+data/exp10ce/
+data/exp10d/
+data/exp10d_plus/
+data/exp10e/
+data/exp11/
+data/exp12/
+data/exp13/
+data/tmp_*/
+data/profile.json
+data/session.json
+
+# Notebook local data
+notebooks/data/
+
+# Collaboration logs (not needed for submission)
+협업일지/

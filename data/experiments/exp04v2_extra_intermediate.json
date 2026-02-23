@@ -1,0 +1,30 @@
+{
+  "completed": 2,
+  "total": 2,
+  "results": [
+    {
+      "config": "C0_parent_child",
+      "description": "Parent-Child (child=300, parent=1500)",
+      "faithfulness": 0.794457458390512,
+      "answer_relevancy": 0.47448037418522243,
+      "context_recall": 0.65,
+      "keyword_accuracy": 0.5530888812196862,
+      "gen_time": 375.0469565000385,
+      "ragas_time": 1265.1720546999713,
+      "latency_total": 1640.2196965999901,
+      "num_docs": 1376
+    },
+    {
+      "config": "C1_pc_window",
+      "description": "Parent-Child + Window (±1)",
+      "faithfulness": 0.7579586185765962,
+      "answer_relevancy": 0.4802253371737913,
+      "context_recall": 0.5,
+      "keyword_accuracy": 0.47963838778467266,
+      "gen_time": 429.22057340003084,
+      "ragas_time": 1450.085929199995,
+      "latency_total": 1879.3069231000263,
+      "num_docs": 1376
+    }
+  ]
+}

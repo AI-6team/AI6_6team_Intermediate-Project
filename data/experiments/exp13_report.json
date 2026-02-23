@@ -1,0 +1,57 @@
+{
+  "experiment": "exp13_contextual_retrieval",
+  "description": "Contextual Retrieval + Korean BM25 optimization",
+  "date": "2026-02-23T09:11:06.726608",
+  "baseline": "ref_v2 (kw_v3=0.8961)",
+  "n_questions": 30,
+  "total_evals": 150,
+  "total_errors": 0,
+  "note": "CORRECTED: removed 12 duplicate ctx_full rows from interrupted session",
+  "results": {
+    "kw_v2": {
+      "ref_v2": 0.8136,
+      "ctx_basic": 0.7437,
+      "ctx_bm25_ko": 0.7756,
+      "ctx_multi_query": 0.7574,
+      "ctx_full": 0.8044
+    },
+    "kw_v3": {
+      "ref_v2": 0.8961,
+      "ctx_basic": 0.8076,
+      "ctx_bm25_ko": 0.8656,
+      "ctx_multi_query": 0.8282,
+      "ctx_full": 0.8886
+    },
+    "v2_perfect": {
+      "ref_v2": 15,
+      "ctx_basic": 11,
+      "ctx_bm25_ko": 12,
+      "ctx_multi_query": 12,
+      "ctx_full": 14
+    },
+    "v3_perfect": {
+      "ref_v2": 19,
+      "ctx_basic": 16,
+      "ctx_bm25_ko": 18,
+      "ctx_multi_query": 18,
+      "ctx_full": 20
+    },
+    "total_time": {
+      "ref_v2": 13.4061,
+      "ctx_basic": 12.8995,
+      "ctx_bm25_ko": 12.0533,
+      "ctx_multi_query": 19.5257,
+      "ctx_full": 23.4144
+    }
+  },
+  "best_config": "ref_v2",
+  "best_kw_v3": 0.8961,
+  "ref_kw_v3": 0.8961,
+  "delta_vs_ref": 0.0,
+  "success_criteria": {
+    "kw_v3_gt_092": false,
+    "doc_D_gt_085": false,
+    "Q25_gt_07": false
+  },
+  "conclusion": "NEGATIVE RESULT: Contextual Retrieval did NOT improve over baseline. All configs worse than ref_v2."
+}

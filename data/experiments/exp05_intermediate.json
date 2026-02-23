@@ -1,0 +1,33 @@
+{
+  "phase": "phase1",
+  "completed": 3,
+  "results": [
+    {
+      "config": "P0_verbatim",
+      "desc": "현행 (대조군)",
+      "keyword_accuracy": 0.6458,
+      "keyword_accuracy_norm": 0.6458,
+      "faithfulness": 0.8872,
+      "context_recall": 0.8333,
+      "latency_sec": 533.4
+    },
+    {
+      "config": "P1_extract",
+      "desc": "추출 강화",
+      "keyword_accuracy": 0.6696,
+      "keyword_accuracy_norm": 0.6696,
+      "faithfulness": 0.8389,
+      "context_recall": 0.8,
+      "latency_sec": 551.0
+    },
+    {
+      "config": "P2_evidence",
+      "desc": "Evidence-first + Final-only",
+      "keyword_accuracy": 0.4711,
+      "keyword_accuracy_norm": 0.4711,
+      "faithfulness": 0.8637,
+      "context_recall": 0.8167,
+      "latency_sec": 678.6
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "completed": 6,
+  "total": 6,
+  "results": [
+    {
+      "config": "A_baseline",
+      "description": "V2 Baseline (zero_shot_ko)",
+      "faithfulness": 0.9882572362278244,
+      "answer_relevancy": 0.39098914496326587,
+      "context_recall": 0.7666666666666667,
+      "keyword_accuracy": 0.44303294257628617,
+      "gen_time": 366.53062249999493,
+      "ragas_time": 1191.478611700004,
+      "latency_total": 1558.0097597000422
+    },
+    {
+      "config": "B_metadata",
+      "description": "+Document Metadata",
+      "faithfulness": 0.8101210011191238,
+      "answer_relevancy": 0.4908859637199507,
+      "context_recall": 0.6857142857142856,
+      "keyword_accuracy": 0.5849142557075993,
+      "gen_time": 338.7238645000034,
+      "ragas_time": 1253.8798854999477,
+      "latency_total": 1592.604106999992
+    },
+    {
+      "config": "C_verbatim",
+      "description": "+Verbatim Prompt",
+      "faithfulness": 0.8286724554309183,
+      "answer_relevancy": 0.5111091750799811,
+      "context_recall": 0.7,
+      "keyword_accuracy": 0.6640141835575271,
+      "gen_time": 407.87993330002064,
+      "ragas_time": 1352.1536951999879,
+      "latency_total": 1760.034141000011
+    },
+    {
+      "config": "D_reranker",
+      "description": "+LLM Reranker",
+      "faithfulness": 0.8518183642085122,
+      "answer_relevancy": 0.5423049766393511,
+      "context_recall": 0.7666666666666667,
+      "keyword_accuracy": 0.6517055934548194,
+      "gen_time": 585.8044881999958,
+      "ragas_time": 1201.7798331000376,
+      "latency_total": 1787.5848414000357
+    },
+    {
+      "config": "E_decompose",
+      "description": "+Query Decomposition",
+      "faithfulness": 0.8722139908595016,
+      "answer_relevancy": 0.49786557436526474,
+      "context_recall": 0.7666666666666667,
+      "keyword_accuracy": 0.5863299384081117,
+      "gen_time": 685.0632926000399,
+      "ragas_time": 1273.1954241999774,
+      "latency_total": 1958.2592422000016
+    },
+    {
+      "config": "F_full",
+      "description": "+Relevance Grading (Full)",
+      "faithfulness": 0.8444269106653006,
+      "answer_relevancy": 0.5136293033688878,
+      "context_recall": 0.7023809523809523,
+      "keyword_accuracy": 0.6155084495254772,
+      "gen_time": 795.9164552000002,
+      "ragas_time": 1254.7915383999934,
+      "latency_total": 2050.708575900004
+    }
+  ]
+}
