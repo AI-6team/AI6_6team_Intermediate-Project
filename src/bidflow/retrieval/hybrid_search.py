@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -22,8 +22,11 @@ class HybridRetriever(BaseRetriever):
     pool_size: int = 50
     use_rerank: bool = False
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    tenant_id: str = "default"
+    user_id: Optional[str] = None
+    group_id: Optional[str] = None
 
-    def __init__(self, vector_store_manager: VectorStoreManager = None, top_k: int = None, weights: List[float] = None, **kwargs):
+    def __init__(self, vector_store_manager: VectorStoreManager = None, top_k: int = None, weights: List[float] = None, tenant_id: str = "default", user_id: str = None, group_id: str = None, **kwargs):
         """
         Args:
             vector_store_manager: 미리 초기화된 VectorStoreManager 인스턴스 (없으면 새로 생성)
@@ -48,6 +51,18 @@ class HybridRetriever(BaseRetriever):
         pool_size = retrieval_cfg.get("rerank_pool", 50) if isinstance(retrieval_cfg, dict) else 50
         rerank_model = retrieval_cfg.get("rerank_model", "BAAI/bge-reranker-v2-m3") if isinstance(retrieval_cfg, dict) else "BAAI/bge-reranker-v2-m3"
 
+        # ACL Filter
+        conditions = [{"tenant_id": tenant_id}]
+        if user_id:
+            conditions.append({"user_id": user_id})
+        if group_id:
+            conditions.append({"group_id": group_id})
+
+        if len(conditions) > 1:
+            acl_filter = {"$and": conditions}
+        else:
+            acl_filter = conditions[0]
+
         # rerank 사용 시 후보군을 pool_size만큼 가져옴
         search_k = pool_size if use_rerank else top_k
 
@@ -55,12 +70,13 @@ class HybridRetriever(BaseRetriever):
         if vector_store_manager is None:
             vector_store_manager = VectorStoreManager()
 
-        vector_retriever = vector_store_manager.get_retriever(search_kwargs={"k": search_k})
+        vector_retriever = vector_store_manager.get_retriever(search_kwargs={"k": search_k, "filter": acl_filter})
 
-        # BM25 초기화 (전체 문서 로드 필요)
+        # BM25 초기화 (테넌트 문서만 로드)
         all_docs = []
         try:
-             result = vector_store_manager.vector_db.get()
+             # Fetch only tenant documents for BM25
+             result = vector_store_manager.vector_db.get(where=acl_filter)
              if result and result["documents"]:
                 for i, text in enumerate(result["documents"]):
                     meta = result["metadatas"][i] if result["metadatas"] else {}
@@ -69,7 +85,7 @@ class HybridRetriever(BaseRetriever):
             print(f"Warning: Failed to fetch docs for BM25: {e}")
 
         if not all_docs:
-             bm25_retriever = BM25Retriever.from_documents([Document(page_content="empty", metadata={})])
+             bm25_retriever = None
         else:
             bm25_retriever = BM25Retriever.from_documents(all_docs)
             bm25_retriever.k = search_k
@@ -83,6 +99,9 @@ class HybridRetriever(BaseRetriever):
             pool_size=pool_size,
             use_rerank=use_rerank,
             rerank_model=rerank_model,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            group_id=group_id,
             **kwargs
         )
 
@@ -98,12 +117,13 @@ class HybridRetriever(BaseRetriever):
         search_k = self.pool_size if self.use_rerank else self.top_k
 
         # 1. 각 검색기 실행
-        try:
-            self.bm25_retriever.k = search_k * 2  # 후보군을 더 많이 가져옴
-            bm25_docs = self.bm25_retriever.invoke(query)
-        except Exception as e:
-            print(f"BM25 Error: {e}")
-            bm25_docs = []
+        bm25_docs = []
+        if self.bm25_retriever:
+            try:
+                self.bm25_retriever.k = search_k * 2  # 후보군을 더 많이 가져옴
+                bm25_docs = self.bm25_retriever.invoke(query)
+            except Exception as e:
+                print(f"BM25 Error: {e}")
 
         try:
             self.vector_retriever.search_kwargs["k"] = search_k * 2
@@ -155,22 +175,3 @@ class HybridRetriever(BaseRetriever):
         sorted_contents = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
 
         return [doc_map[content] for content in sorted_contents[:limit]]
-
-    def _fetch_all_docs(self, manager: VectorStoreManager) -> List[Document]:
-        """
-        ChromaDB에서 모든 문서를 가져와 LangChain Document로 변환
-        """
-        try:
-            result = manager.vector_db.get()
-            docs = []
-            if result and result["documents"]:
-                for i, text in enumerate(result["documents"]):
-                    meta = result["metadatas"][i] if result["metadatas"] else {}
-                    docs.append(Document(page_content=text, metadata=meta))
-            return docs
-        except Exception as e:
-            print(f"Warning: Failed to fetch docs for BM25: {e}")
-            return []
-
-    def _create_empty_bm25(self):
-        return BM25Retriever.from_documents([Document(page_content="empty", metadata={})])

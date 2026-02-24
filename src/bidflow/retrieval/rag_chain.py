@@ -1,4 +1,8 @@
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -6,19 +10,21 @@ from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from bidflow.retrieval.hybrid_search import HybridRetriever
 from bidflow.extraction.hint_detector import HintDetector
+from bidflow.ingest.storage import DocumentStore
 
 class RAGChain:
     """
     RAG (Retrieval-Augmented Generation) 체인
     QueryAnalyzer(김보윤), HintDetector(김슬기), Front-loading(김슬기) 통합
     """
-    def __init__(self, retriever=None, model_name: str = "gpt-5-mini", use_query_analyzer: bool = False):
+    def __init__(self, retriever=None, model_name: str = "gpt-5-mini", use_query_analyzer: bool = False, tenant_id: str = "default", user_id: str = None, group_id: str = None):
         dest_temp = 0
         if model_name == "gpt-5-mini":
             dest_temp = 1 # [Fix] Reasoning model requires temp=1
 
         self.llm = ChatOpenAI(model=model_name, temperature=dest_temp, timeout=60, max_retries=2)
         self.hint_detector = HintDetector()
+        self.tenant_id = tenant_id
 
         # QueryAnalyzer (optional, 김보윤)
         self.query_analyzer = None
@@ -28,7 +34,7 @@ class RAGChain:
             print("[RAGChain] QueryAnalyzer enabled")
 
         if retriever is None:
-            self.retriever = HybridRetriever()
+            self.retriever = HybridRetriever(tenant_id=tenant_id, user_id=user_id, group_id=group_id)
         else:
             self.retriever = retriever
 
@@ -76,6 +82,16 @@ class RAGChain:
                     if doc.page_content not in seen:
                         merged.append(doc)
                 docs = merged
+
+        # 검색된 문서가 없는 경우 테넌트별 설정 메시지 반환
+        if not docs:
+            doc_store = DocumentStore()
+            config = doc_store.load_tenant_config(self.tenant_id)
+            fallback_msg = config.get("no_result_message", "해당 정보를 찾을 수 없습니다.")
+            return {
+                "answer": fallback_msg,
+                "retrieved_contexts": []
+            }
 
         context_text = "\n\n".join([doc.page_content for doc in docs])
 
