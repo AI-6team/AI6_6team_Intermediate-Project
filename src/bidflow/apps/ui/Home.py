@@ -4,9 +4,6 @@ from bidflow.utils.fonts import set_korean_font
 # 한글 폰트 설정 (Mac/Window/Linux)
 set_korean_font()
 
-# 한글 폰트 설정 (Mac/Window/Linux)
-set_korean_font()
-
 st.set_page_config(
     page_title="BidFlow",
     page_icon="📑",
