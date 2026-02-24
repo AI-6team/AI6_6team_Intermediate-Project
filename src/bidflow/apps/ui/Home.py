@@ -1,10 +1,6 @@
 import streamlit as st
 from bidflow.utils.fonts import set_korean_font
 
-# 한글 폰트 설정 (Mac/Window/Linux)
-set_korean_font()
-
-# 한글 폰트 설정 (Mac/Window/Linux)
 set_korean_font()
 
 st.set_page_config(
@@ -13,17 +9,43 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Persistence Load ---
+from bidflow.apps.ui.auth import load_authenticator, require_login, register_form
 from bidflow.apps.ui.session import init_app_session
 
-init_app_session()
+# ── 미인증 상태: 로그인 / 회원가입 탭 ──────────────────────────────
+if not st.session_state.get("authentication_status"):
+    st.title("BidFlow")
+    st.caption("지능형 입찰 분석 시스템")
+    st.divider()
+
+    tab_login, tab_register = st.tabs(["로그인", "회원가입"])
+
+    authenticator, _ = load_authenticator()
+
+    with tab_login:
+        authenticator.login(location="main")
+        status = st.session_state.get("authentication_status")
+        if status is False:
+            st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
+
+    with tab_register:
+        register_form()
+
+    if st.session_state.get("authentication_status"):
+        st.rerun()
+
+    st.stop()
+
+# ── 인증 완료: 앱 메인 화면 ─────────────────────────────────────────
+user_id = require_login()
+init_app_session(user_id=user_id)
 
 st.title("BidFlow: Intelligent RFP Analysis")
 st.markdown("""
-### 🚀 보안 강화형 지능형 입찰 분석 시스템
+### 보안 강화형 지능형 입찰 분석 시스템
 **Don't just Write, Find & Verify.**
 
-BidFlow는 RFP 문서에서 필수/결격 조항을 구조적으로 추출하고, 
+BidFlow는 RFP 문서에서 필수/결격 조항을 구조적으로 추출하고,
 회사 프로필과 비교하여 입찰 적격성을 판정하는 보안 중심 RAG 시스템입니다.
 
 ---

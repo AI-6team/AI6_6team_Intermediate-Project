@@ -18,3 +18,19 @@ retrieval:
 model:
   llm: gpt-5-mini
   embedding: text-embedding-3-small
+
+storage:
+  base: "data"
+  accounts_dir: "accounts"  # 사용자 공간 상위 디렉토리 (base/accounts/{user_id}/)
+
+  # 사용자별 격리 공간 (base/accounts/{user_id}/{space_name}/)
+  user_spaces:
+    - name: raw
+    - name: processed
+    - name: vectordb
+
+  # 공유 공간 (base/shared/{space_name}/)
+  shared_spaces:
+    - name: raw
+    - name: knowledge
+    - name: templates

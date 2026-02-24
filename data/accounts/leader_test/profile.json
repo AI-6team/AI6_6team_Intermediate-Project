@@ -1,0 +1,13 @@
+{
+  "id": "comp_001",
+  "name": "Acme Corp (Default)",
+  "data": {
+    "region": "Seoul",
+    "credit_rating": "B+",
+    "employees": 10,
+    "licenses": [
+      "소프트웨어사업자"
+    ]
+  },
+  "updated_at": "2026-02-24T15:47:19.308451"
+}

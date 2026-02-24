@@ -1,33 +1,33 @@
 import streamlit as st
 from bidflow.domain.models import CompanyProfile, ComplianceMatrix, ExtractionSlot
 from bidflow.validation.validator import RuleBasedValidator
+from bidflow.apps.ui.auth import require_login
 
 st.set_page_config(page_title="Go/No-Go Decision", page_icon="🚦", layout="wide")
+
+user_id = require_login()
 
 st.title("구조적 판정 (Go/No-Go Decision)")
 
 from bidflow.apps.ui.session import init_app_session
-init_app_session()
+init_app_session(user_id=user_id)
 
 if "extraction_results" not in st.session_state:
     st.warning("먼저 문서를 업로드하고 분석을 수행하세요.")
     st.stop()
-    
+
 if "company_profile" not in st.session_state:
     st.warning("먼저 Profile 탭에서 회사 정보를 설정하세요.")
     st.stop()
 
-# 데이터 로드 (Dict -> Model 변환 필요)
-# MVP: extraction_results는 dict 상태이므로 모델로 복원하거나 dict로 처리
 results_dict = st.session_state["extraction_results"]
 profile = st.session_state["company_profile"]
 
 # ComplianceMatrix 모델 재구성
 slots_map = {}
-# G1~G4 통합
 for group in ["g1", "g2", "g3", "g4"]:
     if group in results_dict:
-        if group == "g4": continue # 배점표는 별도
+        if group == "g4": continue
         for k, v in results_dict[group].items():
             slots_map[k] = ExtractionSlot(**v)
 
@@ -40,7 +40,7 @@ matrix = ComplianceMatrix(
 validator = RuleBasedValidator()
 decisions = validator.validate(matrix, profile)
 
-# 종합 판정 (DecisionEngine, 김보윤)
+# 종합 판정
 recommendation = validator.get_recommendation(decisions)
 signal = recommendation["signal"]
 
@@ -51,7 +51,6 @@ elif signal == "yellow":
 else:
     st.success(f"## {recommendation['recommendation']}")
 
-# 결과 표시
 st.subheader("판정 결과 요약")
 
 col1, col2, col3 = st.columns(3)
@@ -68,12 +67,12 @@ st.divider()
 for d in decisions:
     color = "red" if d.decision == "RED" else "gray" if d.decision == "GRAY" else "green"
     icon = "❌" if d.decision == "RED" else "❓" if d.decision == "GRAY" else "✅"
-    
+
     with st.expander(f"{icon} [{d.decision}] {d.slot_key}"):
         st.write(f"**Reasons:**")
         for r in d.reasons:
             st.write(f"- {r}")
-        
+
         if d.evidence:
             st.write("**Evidence:**")
             st.json([e.model_dump() for e in d.evidence])

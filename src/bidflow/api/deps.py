@@ -1,6 +1,6 @@
+import os
 from fastapi import Security, HTTPException, status
 from fastapi.security import APIKeyHeader
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,19 +8,32 @@ load_dotenv()
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-def get_current_user(api_key_header: str = Security(api_key_header)):
+
+def _load_api_keys() -> dict:
     """
-    내부/토큰 접근을 위한 간단한 API 키 검증입니다.
+    환경변수 BIDFLOW_API_KEYS에서 API 키를 로드합니다.
+    형식: "sk-key1:user1,sk-key2:user2"
     """
-    # MVP에서는 ADMIN_PASSWORD 또는 .env의 특정 API 토큰과 비교합니다.
-    expected_key = os.getenv("ADMIN_PASSWORD", "secret") 
-    # 또는 별도의 내부 토큰을 사용합니다.
-    # 설계서에 Token/Internal로 명시되어 있습니다. 편의상 ADMIN_PASSWORD를 공유 토큰으로 사용합니다.
-    
-    if api_key_header == expected_key:
-        return "admin"
-    
+    raw = os.getenv("BIDFLOW_API_KEYS", "")
+    api_keys = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if ":" in pair:
+            key, user = pair.split(":", 1)
+            api_keys[key.strip()] = user.strip()
+    return api_keys
+
+
+def get_current_user(api_key: str = Security(api_key_header)) -> str:
+    """
+    X-API-Key 헤더를 검증하고 user_id를 반환합니다.
+    환경변수 BIDFLOW_API_KEYS에서 키:사용자 매핑을 조회합니다.
+    """
+    api_keys = _load_api_keys()
+    if api_key and api_key in api_keys:
+        return api_keys[api_key]
+
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="자격 증명을 검증할 수 없습니다."
+        detail="유효하지 않은 API 키입니다."
     )

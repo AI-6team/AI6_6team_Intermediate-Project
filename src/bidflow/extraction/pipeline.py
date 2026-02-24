@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from bidflow.extraction.chains import G1Chain, G2Chain, G3Chain, G4Chain
 from bidflow.extraction.hint_detector import HintDetector
-from bidflow.ingest.storage import VectorStoreManager
+from bidflow.ingest.storage import VectorStoreManager, StorageRegistry
 from bidflow.retrieval.hybrid_search import HybridRetriever
 from bidflow.domain.models import ComplianceMatrix, ExtractionSlot
 from bidflow.security.rails.input_rail import InputRail
@@ -12,8 +12,10 @@ class ExtractionPipeline:
     """
     RFP 추출 파이프라인 (G1 -> G2/G3 -> G4)
     """
-    def __init__(self):
-        self.vector_manager = VectorStoreManager()
+    def __init__(self, user_id: str = "global"):
+        from bidflow.core.config import get_config
+        registry = StorageRegistry(get_config("dev"))
+        self.vector_manager = VectorStoreManager(user_id=user_id, registry=registry)
         self.retriever = HybridRetriever(self.vector_manager)
         self.g1_chain = G1Chain()
         self.g2_chain = G2Chain()
@@ -33,10 +35,7 @@ class ExtractionPipeline:
         context_text = "\n\n".join([d.page_content for d in docs])
 
         # --- Security Rail Application ---
-        # 1. Prompt Injection 검사
         self.input_rail.check(context_text)
-        
-        # 2. PII Masking
         context_text = self.pii_masker.mask(context_text)
         # ---------------------------------
 
@@ -54,9 +53,8 @@ class ExtractionPipeline:
         print(f"--- G1 추출 시작 ({doc_hash}) ---")
         g1_result = self.g1_chain.run(context_with_hints)
         results["g1"] = g1_result.model_dump()
-        
+
         project_name = g1_result.project_name.value
-        # 기간 정보 추출 (문자열로 변환 필요)
         period_val = str(g1_result.period.value)
         issuer_val = str(g1_result.issuer.value)
 
@@ -70,12 +68,11 @@ class ExtractionPipeline:
         g3_result = self.g3_chain.run(context_text, project_name, issuer_val)
         results["g3"] = g3_result.model_dump()
 
-        # 5. G4: 배점 (테이블 위주지만 텍스트도 참고)
-        # 배점표는 "평가 항목 및 배점" 쿼리로 다시 검색하는 것이 좋음
+        # 5. G4: 배점
         print("--- G4 추출 시작 ---")
         docs_g4 = self.retriever.invoke("제안서 평가 항목 및 배점 기준표")
         context_g4 = "\n\n".join([d.page_content for d in docs_g4])
-        
+
         g4_result = self.g4_chain.run(context_g4)
         results["g4"] = g4_result.model_dump()
 

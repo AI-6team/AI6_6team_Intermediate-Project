@@ -34,6 +34,12 @@ env/
 # Environment variables
 .env
 
+# 인증 설정 (비밀번호 해시, 쿠키 키 포함)
+configs/users.yaml
+
+# 인증 설정 (비밀번호 해시, 쿠키 키 포함)
+configs/users.yaml
+
 # Checkpoints
 .ipynb_checkpoints/
 

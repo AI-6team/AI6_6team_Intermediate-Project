@@ -1,12 +1,15 @@
 import streamlit as st
 import json
+from bidflow.apps.ui.auth import require_login
 
 st.set_page_config(page_title="Compliance Matrix", page_icon="📊", layout="wide")
+
+user_id = require_login()
 
 st.title("Compliance Matrix (Extraction Result)")
 
 from bidflow.apps.ui.session import init_app_session
-init_app_session()
+init_app_session(user_id=user_id)
 
 if "extraction_results" not in st.session_state:
     st.warning("먼저 문서를 업로드하고 분석을 수행하세요.")
@@ -62,7 +65,6 @@ with tabs[3]:
     st.subheader("G4: 배점표 (Scoring Table)")
     if "g4" in results:
         data = results["g4"]
-        # 배점표는 리스트 형태
         items = data.get("items", [])
         if items:
             st.dataframe(items)
