@@ -37,9 +37,6 @@ env/
 # 인증 설정 (비밀번호 해시, 쿠키 키 포함)
 configs/users.yaml
 
-# 인증 설정 (비밀번호 해시, 쿠키 키 포함)
-configs/users.yaml
-
 # Checkpoints
 .ipynb_checkpoints/
 
@@ -83,6 +80,10 @@ data/eval/gold/*
 !data/eval/gold/.gitkeep
 data/eval/synthetic/*
 !data/eval/synthetic/.gitkeep
+
+# 사용자별·팀별 런타임 데이터 (개인 업로드 파일, 벡터DB, 코멘트 등)
+data/accounts/
+data/shared/
 
 # Experiment VectorDB & binary data (keep CSV/JSON/PNG results)
 data/chroma_exp/
