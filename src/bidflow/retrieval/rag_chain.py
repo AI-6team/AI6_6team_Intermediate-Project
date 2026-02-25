@@ -3,6 +3,7 @@ import logging
 import logging.handlers
 import os
 import json
+import gzip
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,7 +24,7 @@ if not os.path.exists("logs"):
     os.makedirs("logs")
 
 security_logger = logging.getLogger("bidflow.security")
-security_logger.setLevel(logging.WARNING)
+security_logger.setLevel(logging.INFO)
 # Check if handler already exists to avoid duplicate logs
 # [Log Rotation] maxBytes=10MB, backupCount=5 
 if not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in security_logger.handlers):
@@ -48,11 +49,37 @@ if not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in security
                     log_entry[key] = value
             return json.dumps(log_entry, ensure_ascii=False)
 
-    file_handler = logging.handlers.RotatingFileHandler(
-        "logs/security.log", maxBytes=10*1024*1024, backupCount=5, encoding="utf-8"
+    formatter = JSONFormatter()
+
+    # Log Rotation 시 gzip 압축 설정
+    def namer(name):
+        return name + ".gz"
+
+    def rotator(source, dest):
+        with open(source, "rb") as f_in:
+            with gzip.open(dest, "wb") as f_out:
+                f_out.writelines(f_in)
+        os.remove(source)
+
+    # 1. 중요 보안 경고 (WARNING 이상) -> security.log (보관 기간 길게: 10MB x 10개)
+    security_handler = logging.handlers.RotatingFileHandler(
+        "logs/security.log", maxBytes=10*1024*1024, backupCount=10, encoding="utf-8"
     )
-    file_handler.setFormatter(JSONFormatter())
-    security_logger.addHandler(file_handler)
+    security_handler.rotator = rotator
+    security_handler.namer = namer
+    security_handler.setLevel(logging.WARNING)
+    security_handler.setFormatter(formatter)
+    security_logger.addHandler(security_handler)
+
+    # 2. 전체 감사 로그 (INFO 이상) -> audit.log (회전 빨라도 됨: 10MB x 5개)
+    audit_handler = logging.handlers.RotatingFileHandler(
+        "logs/audit.log", maxBytes=10*1024*1024, backupCount=5, encoding="utf-8"
+    )
+    audit_handler.rotator = rotator
+    audit_handler.namer = namer
+    audit_handler.setLevel(logging.INFO)
+    audit_handler.setFormatter(formatter)
+    security_logger.addHandler(audit_handler)
 
 class RAGChain:
     """
@@ -188,6 +215,28 @@ class RAGChain:
         
         # [Security] Output Rail: 답변 검증 (PII 유출 방지)
         answer = self._validate_answer(answer, request_metadata)
+
+        # [Audit Log] 정상 응답에 대한 감사 로그 기록
+        # PII 차단 메시지가 아닌 경우에만 기록 (차단 시에는 _validate_answer 내부에서 WARNING 로그가 남음)
+        if "보안 경고" not in answer:
+            ref_docs = []
+            for doc in docs:
+                ref_docs.append({
+                    "filename": doc.metadata.get("filename", "Unknown"),
+                    "page": doc.metadata.get("page_no", "N/A"),
+                    "doc_hash": doc.metadata.get("doc_hash", "Unknown")
+                })
+            
+            log_extra = {
+                "tenant_id": self.tenant_id,
+                "event": "rag_response",
+                "question_snippet": question[:50] + "..." if len(question) > 50 else question,
+                "references": ref_docs
+            }
+            if request_metadata:
+                log_extra.update(request_metadata)
+            
+            security_logger.info("RAG response generated successfully", extra=log_extra)
 
         result = {
             "answer": answer,

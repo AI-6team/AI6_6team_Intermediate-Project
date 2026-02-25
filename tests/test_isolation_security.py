@@ -519,5 +519,87 @@ class TestIsolationAndSecurity(unittest.TestCase):
                 else:
                     self.fail("SSRF log entry not found or metadata missing (Check if RAGChain code is updated).")
 
+    def test_13_audit_logging(self):
+        """[보안] Audit Logging: 정상 응답 시 감사 로그 기록 확인"""
+        print("\n[Test 13] Security: Audit Logging Verification")
+        
+        log_file = "logs/audit.log"
+        
+        # Ensure log directory exists
+        if not os.path.exists("logs"):
+            os.makedirs("logs")
+        
+        # Read current log size to check for *new* logs later
+        start_pos = 0
+        if os.path.exists(log_file):
+            with open(log_file, "r", encoding="utf-8") as f:
+                f.seek(0, 2) # Seek to end
+                start_pos = f.tell()
+            
+        # Mock Retriever & LLM
+        from langchain_core.documents import Document
+        from langchain_core.messages import AIMessage
+        
+        # Mock Document with metadata
+        mock_doc = Document(
+            page_content="This is a safe context about budget.", 
+            metadata={"filename": "budget_2024.pdf", "page_no": 5, "doc_hash": "hash123"}
+        )
+        mock_retriever = MagicMock()
+        mock_retriever.invoke.return_value = [mock_doc]
+        
+        safe_answer = "The budget is 50 million won."
+        
+        with patch("bidflow.retrieval.rag_chain.ChatOpenAI") as MockChatOpenAI:
+            mock_llm = MockChatOpenAI.return_value
+            rag_chain = RAGChain(retriever=mock_retriever, tenant_id=self.test_tenant)
+            
+            # Mock response
+            response_message = AIMessage(content=safe_answer)
+            mock_llm.invoke.return_value = response_message
+            mock_llm.return_value = response_message
+            
+            # Invoke chain with metadata
+            metadata = {"ip": "192.168.1.100", "user": "audit_user"}
+            rag_chain.invoke("What is the budget?", request_metadata=metadata)
+            
+        # Verify log content
+        if os.path.exists(log_file):
+            with open(log_file, "r", encoding="utf-8") as f:
+                f.seek(start_pos)
+                new_logs = f.readlines()
+            
+            found_audit_log = False
+            for line in new_logs:
+                line = line.strip()
+                if not line: continue
+                try:
+                    log_entry = json.loads(line)
+                    # Check for the audit log
+                    if log_entry.get("event") == "rag_response":
+                        self.assertEqual(log_entry.get("level"), "INFO")
+                        self.assertEqual(log_entry.get("tenant_id"), self.test_tenant)
+                        self.assertEqual(log_entry.get("ip"), "192.168.1.100")
+                        self.assertEqual(log_entry.get("user"), "audit_user")
+                        
+                        # Check references
+                        refs = log_entry.get("references", [])
+                        self.assertTrue(len(refs) > 0)
+                        self.assertEqual(refs[0]["filename"], "budget_2024.pdf")
+                        self.assertEqual(refs[0]["page"], 5)
+                        
+                        print(f"Verified Audit Log: {json.dumps(log_entry, ensure_ascii=False)}")
+                        found_audit_log = True
+                        break
+                except json.JSONDecodeError:
+                    continue
+            
+            if found_audit_log:
+                print("-> Pass: Audit log recorded successfully with references.")
+            else:
+                self.fail("Expected Audit log entry not found.")
+        else:
+            self.fail(f"Log file {log_file} not found.")
+
 if __name__ == "__main__":
     unittest.main()
