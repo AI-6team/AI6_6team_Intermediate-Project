@@ -15,6 +15,7 @@ from bidflow.parsing.docx_parser import DOCXParser
 from bidflow.parsing.hwpx_parser import HWPXParser
 from bidflow.ingest.storage import DocumentStore, VectorStoreManager
 from bidflow.security.rails.input_rail import InputRail, SecurityException
+from bidflow.security.pii_filter import PIIFilter
 
 class RFPLoader:
     """
@@ -30,6 +31,7 @@ class RFPLoader:
         self.docx_parser = DOCXParser()
         self.hwpx_parser = HWPXParser()
         self.input_rail = InputRail()
+        self.pii_filter = PIIFilter()
 
     def process_file(self, file_obj, filename: str, chunk_size: int = None, chunk_overlap: int = None, table_strategy: str = None, tenant_id: str = "default", user_id: str = "system", group_id: str = "general", max_file_size_mb: int = 50, parsing_timeout: int = 300) -> str:
         """
@@ -203,21 +205,7 @@ class RFPLoader:
 
     def _mask_pii(self, text: str) -> str:
         """
-        텍스트에서 개인정보(주민등록번호, 전화번호, 이메일, 신용카드, 운전면허)를 마스킹합니다.
+        텍스트에서 개인정보(PII)를 마스킹합니다.
+        중앙화된 PIIFilter를 사용하여 일관된 정책(주민번호, 외국인번호, IP 등)을 적용합니다.
         """
-        # 주민등록번호: 6자리-7자리 -> 뒷자리 마스킹
-        text = re.sub(r'(\d{6})[-]\d{7}', r'\1-*******', text)
-        
-        # 운전면허번호: 2자리-2자리-6자리-2자리 -> 마스킹
-        text = re.sub(r'(\d{2})[-]\d{2}[-]\d{6}[-]\d{2}', r'\1-**-******-**', text)
-        
-        # 신용카드: 16자리 숫자 (하이픈/공백 포함) -> 마스킹
-        text = re.sub(r'(\d{4}[-\s]?){3}\d{4}', r'****-****-****-****', text)
-        
-        # 휴대전화번호: 010-xxxx-xxxx -> 뒷자리 마스킹
-        text = re.sub(r'(01[016789][-.\s]?\d{3,4})[-.\s]?\d{4}', r'\1-****', text)
-        
-        # 이메일: id@domain -> id@****
-        text = re.sub(r'([a-zA-Z0-9._%+-]+)@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r'\1@****', text)
-        
-        return text
+        return self.pii_filter.sanitize(text)

@@ -1,8 +1,8 @@
 from typing import List, Dict, Any, Optional
-import re
 import logging
 import logging.handlers
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,6 +15,8 @@ from langchain_openai import ChatOpenAI
 from bidflow.retrieval.hybrid_search import HybridRetriever
 from bidflow.extraction.hint_detector import HintDetector
 from bidflow.ingest.storage import DocumentStore
+from bidflow.security.tool_gate import ToolExecutionGate
+from bidflow.security.pii_filter import PIIFilter
 
 # Security Logger Setup
 if not os.path.exists("logs"):
@@ -23,12 +25,33 @@ if not os.path.exists("logs"):
 security_logger = logging.getLogger("bidflow.security")
 security_logger.setLevel(logging.WARNING)
 # Check if handler already exists to avoid duplicate logs
+# [Log Rotation] maxBytes=10MB, backupCount=5 
 if not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in security_logger.handlers):
+    # JSON Formatter 정의
+    class JSONFormatter(logging.Formatter):
+        def format(self, record):
+            log_entry = {
+                "timestamp": self.formatTime(record, self.datefmt),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage()
+            }
+            # 기본 LogRecord 속성 제외하고 extra로 전달된 필드 추가
+            base_attrs = {
+                'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename',
+                'funcName', 'levelname', 'levelno', 'lineno', 'module',
+                'msecs', 'message', 'msg', 'name', 'pathname', 'process',
+                'processName', 'relativeCreated', 'stack_info', 'thread', 'threadName'
+            }
+            for key, value in record.__dict__.items():
+                if key not in base_attrs and not key.startswith('_'):
+                    log_entry[key] = value
+            return json.dumps(log_entry, ensure_ascii=False)
+
     file_handler = logging.handlers.RotatingFileHandler(
         "logs/security.log", maxBytes=10*1024*1024, backupCount=5, encoding="utf-8"
     )
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
+    file_handler.setFormatter(JSONFormatter())
     security_logger.addHandler(file_handler)
 
 class RAGChain:
@@ -44,6 +67,10 @@ class RAGChain:
         self.llm = ChatOpenAI(model=model_name, temperature=dest_temp, timeout=300, max_retries=2)
         self.hint_detector = HintDetector()
         self.tenant_id = tenant_id
+        
+        # [Security] Execution Rail: 툴/검색 실행 게이트
+        self.tool_gate = ToolExecutionGate(allowed_tools={"search_rfp"})
+        self.pii_filter = PIIFilter()
 
         # QueryAnalyzer (optional, 김보윤)
         self.query_analyzer = None
@@ -88,7 +115,22 @@ class RAGChain:
             }
         """
         # [Security] Input Rail: 질문 정제 (길이 제한 및 PII 마스킹)
-        question = self._sanitize_input(question)
+        question = self.pii_filter.sanitize(question)
+
+        # [Security] Execution Rail: 검색 파라미터 검증
+        # RAG 검색 행위를 하나의 'Tool Execution'으로 간주하여 검증
+        search_args = {"query": question, "doc_ids": doc_ids}
+        if not self.tool_gate.validate_tool_call("search_rfp", search_args):
+            # 메타데이터 구성
+            log_extra = {"tenant_id": self.tenant_id}
+            if request_metadata:
+                log_extra.update(request_metadata)
+            
+            security_logger.warning(f"[ToolGate] Blocked unsafe search request. Query: {question}", extra=log_extra)
+            return {
+                "answer": "⚠️ 보안 정책에 의해 요청이 차단되었습니다. (Invalid Parameters or SSRF detected)",
+                "retrieved_contexts": []
+            }
 
         # 0. Query Analysis (optional, 김보윤)
         query_type = None
@@ -182,45 +224,18 @@ class RAGChain:
             print(f"[Front-loading] Failed: {e}")
             return []
 
-    def _sanitize_input(self, text: str) -> str:
-        """사용자 질문에 대한 보안 정제 (Input Rail)"""
-        # 1. 길이 제한 (DoS 방지)
-        max_len = 2000
-        if len(text) > max_len:
-            text = text[:max_len]
-        
-        # 2. PII 마스킹 (질문 내 민감정보가 외부로 전송되는 것 방지)
-        # 주민번호
-        text = re.sub(r'(\d{6})[-]\d{7}', r'\1-*******', text)
-        # 카드번호
-        text = re.sub(r'(\d{4}[-\s]?){3}\d{4}', r'****-****-****-****', text)
-        # 이메일
-        text = re.sub(r'([a-zA-Z0-9._%+-]+)@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r'\1@****', text)
-        # 운전면허
-        text = re.sub(r'(\d{2})[-]\d{2}[-]\d{6}[-]\d{2}', r'\1-**-******-**', text)
-        
-        return text
-
     def _validate_answer(self, answer: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         LLM 생성 답변에 대한 보안 검증 (Output Rail)
         """
-        # PII 유출 방지 패턴 목록 (주민번호, 신용카드, 이메일, 운전면허)
-        pii_patterns = {
-            "Resident Registration Number": r'\d{6}[-]\d{7}',
-            "Credit Card Number": r'(\d{4}[-\s]?){3}\d{4}',
-            "Email Address": r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-            "Driver License Number": r'\d{2}[-]\d{2}[-]\d{6}[-]\d{2}'
-        }
+        detected_pii_type = self.pii_filter.detect(answer)
         
-        for pii_type, pattern in pii_patterns.items():
-            if re.search(pattern, answer):
-                log_info = [f"Tenant: {self.tenant_id}"]
-                if metadata:
-                    for k, v in metadata.items():
-                        log_info.append(f"{k}: {v}")
-                
-                security_logger.warning(f"Output Rail Blocked: PII detected ({pii_type}) in generated answer. [{', '.join(log_info)}]")
-                return "⚠️ 보안 경고: 생성된 답변에 개인정보(PII)가 포함되어 있어 차단되었습니다."
+        if detected_pii_type:
+            log_extra = {"tenant_id": self.tenant_id, "pii_type": detected_pii_type}
+            if metadata:
+                log_extra.update(metadata)
+            
+            security_logger.warning("Output Rail Blocked: PII detected in generated answer.", extra=log_extra)
+            return "⚠️ 보안 경고: 생성된 답변에 개인정보(PII)가 포함되어 있어 차단되었습니다."
         
         return answer

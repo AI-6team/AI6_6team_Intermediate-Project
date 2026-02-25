@@ -1,6 +1,8 @@
 import unittest
 import io
 import os
+import json
+import sys
 import shutil
 import warnings
 import time
@@ -8,6 +10,9 @@ from unittest.mock import MagicMock, patch
 
 # Suppress SWIG warning from ChromaDB/hnswlib
 warnings.filterwarnings("ignore", message=".*swigvarlink.*")
+
+# src 디렉토리를 모듈 검색 경로에 추가
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from bidflow.ingest.loader import RFPLoader
 from bidflow.ingest.storage import DocumentStore
@@ -166,11 +171,11 @@ class TestIsolationAndSecurity(unittest.TestCase):
         
         # 검증
         self.assertIn("990101-*******", masked_text)
-        self.assertIn("010-1234-****", masked_text)
+        self.assertIn("010-****-5678", masked_text)
         self.assertIn("user@****", masked_text)
         
         self.assertNotIn("1234567", masked_text)
-        self.assertNotIn("5678", masked_text)
+        self.assertNotIn("1234", masked_text)
         self.assertNotIn("example.com", masked_text)
         
         print("-> Pass: PII masked successfully")
@@ -386,16 +391,30 @@ class TestIsolationAndSecurity(unittest.TestCase):
         if os.path.exists(log_file):
             with open(log_file, "r", encoding="utf-8") as f:
                 f.seek(start_pos)
-                new_logs = f.read()
-                
-            print(f"New Log Content:\n{new_logs.strip()}")
+                new_logs = f.readlines()
             
-            self.assertIn("Output Rail Blocked", new_logs)
-            self.assertIn("Resident Registration Number", new_logs)
-            self.assertIn(f"Tenant: {self.test_tenant}", new_logs)
-            self.assertIn("ip: 127.0.0.1", new_logs)
+            found_json_log = False
+            for line in new_logs:
+                line = line.strip()
+                if not line: continue
+                try:
+                    log_entry = json.loads(line)
+                    if "Output Rail Blocked" in log_entry.get("message", ""):
+                        self.assertEqual(log_entry.get("pii_type"), "Resident Registration Number")
+                        self.assertEqual(log_entry.get("tenant_id"), self.test_tenant)
+                        self.assertEqual(log_entry.get("ip"), "127.0.0.1")
+                        self.assertEqual(log_entry.get("user"), "test_user")
+                        self.assertEqual(log_entry.get("level"), "WARNING")
+                        print(f"Verified JSON Log: {json.dumps(log_entry, ensure_ascii=False)}")
+                        found_json_log = True
+                        break
+                except json.JSONDecodeError:
+                    continue
             
-            print("-> Pass: Security event logged successfully.")
+            if found_json_log:
+                print("-> Pass: Security event logged successfully in JSON format.")
+            else:
+                self.fail("Expected JSON log entry not found.")
         else:
             self.fail(f"Log file {log_file} not found.")
 
@@ -412,7 +431,17 @@ class TestIsolationAndSecurity(unittest.TestCase):
             
             # 1. PII Masking Test
             raw_query = "내 주민번호는 990101-1234567이고 이메일은 test@example.com입니다."
-            sanitized_query = rag_chain._sanitize_input(raw_query)
+            
+            # Integration Test: Verify invoke() uses sanitized query
+            rag_chain.invoke(raw_query)
+            
+            # Retriever should be called with the sanitized query, not the raw one
+            # Capture the argument passed to retriever.invoke
+            called_args, _ = mock_retriever.invoke.call_args
+            sanitized_query = called_args[0]
+            
+            print(f"Raw: {raw_query}")
+            print(f"Sanitized: {sanitized_query}")
             
             self.assertIn("990101-*******", sanitized_query)
             self.assertIn("test@****", sanitized_query)
@@ -421,16 +450,74 @@ class TestIsolationAndSecurity(unittest.TestCase):
             
             # 2. Length Limit Test
             long_query = "A" * 3000
-            sanitized_long = rag_chain._sanitize_input(long_query)
+            rag_chain.invoke(long_query)
+            
+            called_args_long, _ = mock_retriever.invoke.call_args
+            sanitized_long = called_args_long[0]
+            
             self.assertEqual(len(sanitized_long), 2000)
             
-            print("-> Pass: Input query sanitized successfully.")
-            
-            # 3. Integration Test: Verify invoke() uses sanitized query
-            rag_chain.invoke(raw_query)
-            # Retriever should be called with the sanitized query, not the raw one
-            mock_retriever.invoke.assert_called_with(sanitized_query)
             print("-> Pass: RAGChain.invoke() correctly applies input sanitization.")
+
+    def test_12_tool_gate_ssrf(self):
+        """[보안] Execution Rail: SSRF 공격 시도 차단 테스트"""
+        print("\n[Test 12] Security: Tool Gate SSRF Block")
+        
+        # Mock Retriever
+        mock_retriever = MagicMock()
+        
+        with patch("bidflow.retrieval.rag_chain.ChatOpenAI"):
+            rag_chain = RAGChain(retriever=mock_retriever, tenant_id=self.test_tenant)
+            
+            # SSRF Attack Query (Internal Metadata Service)
+            # ToolExecutionGate는 http/https로 시작하는 문자열을 URL로 간주하고 검사함
+            
+            # Metadata for logging verification
+            metadata = {"ip": "10.0.0.99", "user": "malicious_user"}
+
+            # Case 1: Localhost (PII 마스킹되지 않음 -> IP/Domain 차단 로직 테스트)
+            ssrf_query_local = "http://localhost/admin"
+            result_local = rag_chain.invoke(ssrf_query_local, request_metadata=metadata)
+            self.assertIn("보안 정책에 의해 요청이 차단되었습니다", result_local["answer"])
+
+            # Case 2: Masked IP (PII 필터가 먼저 작동 -> 마스킹된 URL 차단 테스트)
+            # 192.168.0.1 -> ***.***.***.*** 로 변환됨 -> ToolGate가 이를 감지하고 차단해야 함
+            ssrf_query_ip = "http://192.168.0.1/admin"
+            result_ip = rag_chain.invoke(ssrf_query_ip, request_metadata=metadata)
+            self.assertIn("보안 정책에 의해 요청이 차단되었습니다", result_ip["answer"])
+            
+            self.assertEqual(len(result_ip["retrieved_contexts"]), 0)
+            
+            # Retriever should NOT be called because gate blocked it before retrieval
+            mock_retriever.invoke.assert_not_called()
+            
+            print("-> Pass: SSRF attempt blocked by ToolExecutionGate (Localhost & Masked IP).")
+
+            # Verify Logs
+            log_file = "logs/security.log"
+            if os.path.exists(log_file):
+                with open(log_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                
+                found_ssrf_log = False
+                for line in reversed(lines):
+                    try:
+                        log_entry = json.loads(line)
+                        # Check for the log from RAGChain (which has metadata)
+                        if "[ToolGate] Blocked unsafe search request" in log_entry.get("message", ""):
+                            self.assertEqual(log_entry.get("tenant_id"), self.test_tenant)
+                            self.assertEqual(log_entry.get("ip"), "10.0.0.99")
+                            self.assertEqual(log_entry.get("user"), "malicious_user")
+                            print(f"Verified SSRF Log: {json.dumps(log_entry, ensure_ascii=False)}")
+                            found_ssrf_log = True
+                            break
+                    except json.JSONDecodeError:
+                        continue
+                
+                if found_ssrf_log:
+                    print("-> Pass: SSRF event logged successfully with metadata.")
+                else:
+                    self.fail("SSRF log entry not found or metadata missing (Check if RAGChain code is updated).")
 
 if __name__ == "__main__":
     unittest.main()
