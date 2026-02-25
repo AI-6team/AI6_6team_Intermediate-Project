@@ -1,39 +1,39 @@
-import os
-from fastapi import Security, HTTPException, status
-from fastapi.security import APIKeyHeader
-from dotenv import load_dotenv
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from bidflow.db import crud
+import logging
 
-load_dotenv()
+logger = logging.getLogger("uvicorn.error")
 
-API_KEY_NAME = "X-API-Key"
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    # 토큰 정제: 앞뒤 공백 및 따옴표 제거 (클라이언트에서 잘못 보낼 경우 대비)
+    token = token.strip().strip('"')
 
-def _load_api_keys() -> dict:
-    """
-    환경변수 BIDFLOW_API_KEYS에서 API 키를 로드합니다.
-    형식: "sk-key1:user1,sk-key2:user2"
-    """
-    raw = os.getenv("BIDFLOW_API_KEYS", "")
-    api_keys = {}
-    for pair in raw.split(","):
-        pair = pair.strip()
-        if ":" in pair:
-            key, user = pair.split(":", 1)
-            api_keys[key.strip()] = user.strip()
-    return api_keys
+    if not token.startswith("user:"):
+        logger.warning(f"Auth Failed: Invalid token format. Received: {token}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token format",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        username = token.split(":", 1)[1]
+    except IndexError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token structure",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-
-def get_current_user(api_key: str = Security(api_key_header)) -> str:
-    """
-    X-API-Key 헤더를 검증하고 user_id를 반환합니다.
-    환경변수 BIDFLOW_API_KEYS에서 키:사용자 매핑을 조회합니다.
-    """
-    api_keys = _load_api_keys()
-    if api_key and api_key in api_keys:
-        return api_keys[api_key]
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="유효하지 않은 API 키입니다."
-    )
+    user = crud.get_user(username)
+    if user is None:
+        logger.warning(f"Auth Failed: User not found. Username: {username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user

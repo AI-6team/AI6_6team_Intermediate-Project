@@ -4,7 +4,7 @@ import streamlit as st
 from typing import Optional, Dict, Any, List
 
 # API 설정
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 API_KEY = os.getenv("ADMIN_PASSWORD", "secret")
 
 def get_headers():
@@ -12,20 +12,29 @@ def get_headers():
 
 def health_check() -> bool:
     try:
-        # 루트 경로는 /api가 아님
-        root_url = API_BASE_URL.replace("/api", "")
-        response = requests.get(root_url)
+        # API_BASE_URL에서 호스트 루트(http://localhost:8000)만 추출
+        root_url = API_BASE_URL.split("/api")[0]
+        response = requests.get(root_url, timeout=1)
         return response.status_code == 200
     except:
         return False
+
+def _get_mime_type(filename: str) -> str:
+    if filename.lower().endswith('.pdf'):
+        return 'application/pdf'
+    if filename.lower().endswith('.hwp'):
+        return 'application/x-hwp'
+    return 'application/octet-stream'
 
 def upload_file(file) -> Optional[Dict[str, Any]]:
     """
     파일 업로드 API 호출
     """
-    files = {"file": (file.name, file, "application/pdf")}
+    mime_type = _get_mime_type(file.name)
+    files = {"file": (file.name, file, mime_type)}
     try:
-        response = requests.post(f"{API_BASE_URL}/upload", files=files, headers=get_headers())
+        # main.py의 prefix="/api/v1/ingest" 와 ingest.py의 "/upload" 결합
+        response = requests.post(f"{API_BASE_URL}/ingest/upload", files=files, headers=get_headers())
         if response.status_code == 200:
             return response.json()
         else:
@@ -40,7 +49,8 @@ def get_documents() -> List[Dict[str, Any]]:
     문서 목록 조회 API 호출
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/documents", headers=get_headers())
+        # ingest 라우터 하위로 이동됨
+        response = requests.get(f"{API_BASE_URL}/ingest/documents", headers=get_headers())
         if response.status_code == 200:
             return response.json()
         return []
@@ -53,7 +63,8 @@ def get_document_detail(doc_id: str) -> Optional[Dict[str, Any]]:
     문서 상세 조회 API 호출
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/documents/{doc_id}/view", headers=get_headers())
+        # ingest 라우터 하위로 이동됨
+        response = requests.get(f"{API_BASE_URL}/ingest/documents/{doc_id}/view", headers=get_headers())
         if response.status_code == 200:
             return response.json()
         return None

@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+
 import streamlit as st
 import json
 from bidflow.ui.utils import run_validation, get_documents, run_extraction
@@ -42,7 +46,7 @@ st.divider()
 # 2. 문서 선택 및 검증
 docs = get_documents()
 if docs:
-    doc_options = {d["filename"]: d["doc_hash"] for d in docs}
+    doc_options = {d["filename"]: d.get("id", d.get("doc_hash")) for d in docs}
     selected_filename = st.selectbox(t("select_doc"), list(doc_options.keys()))
     doc_hash = doc_options[selected_filename]
 
@@ -71,7 +75,7 @@ if docs:
             # 클라이언트에서 구조를 맞춰줘야 함.
             
             matrix_payload = {
-                "doc_id": doc_hash,
+                "doc_hash": doc_hash,
                 "slots": {**g3} # g3의 슬롯들(required_licenses, restrictions)을 그대로 전달
             }
             

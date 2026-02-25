@@ -1,0 +1,356 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { getDocuments, runExtraction, RFPDocument } from '@/lib/api';
+import UserHeader from '@/components/UserHeader';
+import Modal from '@/components/Modal';
+import CommentSection from '@/components/CommentSection';
+import analysisIcon from '../images/analysis.png';
+
+export default function AnalysisPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [documents, setDocuments] = useState<RFPDocument[]>([]);
+  const [selectedDocId, setSelectedDocId] = useState<string>("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("g1");
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShowAuthModal(true);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    const fetchDocs = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        // Not pushing to router to avoid side-effects if this component is used elsewhere.
+        return;
+      }
+      try {
+        const response = await fetch("http://localhost:8000/api/v1/ingest/documents", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch documents");
+        }
+        const docs: RFPDocument[] = await response.json();
+        setDocuments(docs);
+
+        const paramDocId = searchParams.get('docId');
+        if (paramDocId && docs.some(d => (d.id || d.doc_hash) === paramDocId)) {
+          setSelectedDocId(paramDocId);
+        } else if (docs.length > 0) {
+          setSelectedDocId(docs[0].id || docs[0].doc_hash);
+        }
+      } catch (error) {
+        console.error("Error fetching documents for analysis page:", error);
+        setError("문서 목록을 불러올 수 없습니다.");
+      }
+    };
+    fetchDocs();
+  }, [searchParams]);
+
+  // 문서 선택 변경 시 로컬 스토리지에서 결과 불러오기
+  useEffect(() => {
+    if (selectedDocId) {
+      const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`);
+      if (savedResult) {
+        try {
+          setResult(JSON.parse(savedResult));
+        } catch (e) {
+          setResult(null);
+        }
+      } else {
+        setResult(null);
+      }
+    }
+  }, [selectedDocId]);
+
+  const handleAnalyze = async () => {
+    if (!selectedDocId) return;
+    
+    setAnalyzing(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      // 선택된 문서의 ID로 doc_hash 찾기
+      const selectedDoc = documents.find(d => (d.id || d.doc_hash) === selectedDocId);
+      const docHash = selectedDoc?.doc_hash || selectedDocId;
+
+      const res = await runExtraction(docHash);
+      if (res && res.data) {
+        setResult(res.data);
+        localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(res.data));
+      } else {
+        setError("분석 결과를 가져오지 못했습니다. 서버 로그를 확인해주세요.");
+      }
+    } catch (e) {
+      setError("분석 중 오류가 발생했습니다.");
+    }
+    setAnalyzing(false);
+  };
+
+  const renderSlot = (label: string, slotData: any) => {
+    if (!slotData) return null;
+    const value = (typeof slotData === 'object' && slotData !== null && 'value' in slotData) 
+      ? slotData.value 
+      : slotData;
+
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
+        <div className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wide mb-2">{label}</div>
+        <div className="text-gray-900 dark:text-white text-base font-medium mb-4 leading-relaxed break-words">{value || "-"}</div>
+        {slotData.evidence && slotData.evidence.length > 0 && (
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-300">
+              <span className="shrink-0 inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
+                p.{slotData.evidence[0].page_no}
+              </span>
+              <span className="italic">"{slotData.evidence[0].text_snippet}"</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderCellContent = (content: any) => {
+    if (content === null || content === undefined) return "-";
+    
+    if (Array.isArray(content)) {
+      if (content.length === 0) return <span className="text-gray-400 italic text-xs">Empty</span>;
+      return (
+        <ul className="list-disc list-inside text-xs space-y-1">
+          {content.map((item: any, i: number) => (
+            <li key={i}>{renderCellContent(item)}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    if (typeof content === 'object') {
+      return (
+        <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs border border-gray-100 dark:border-gray-700 min-w-[150px]">
+          {Object.entries(content).map(([key, val]) => (
+            <div key={key} className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 mb-1 last:mb-0 border-b border-gray-200/50 dark:border-gray-700/50 last:border-0 pb-1 last:pb-0">
+              <span className="font-semibold text-gray-500 dark:text-gray-400">{key}</span>
+              <span className="text-gray-700 dark:text-gray-300 break-words">
+                {renderCellContent(val)}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return String(content);
+  };
+
+  const renderTable = (data: any) => {
+    const items = Array.isArray(data) ? data : (data?.items || []);
+    if (!items || items.length === 0) return <div className="text-gray-500 italic p-4">데이터가 없습니다.</div>;
+
+    const headers = Object.keys(items[0]);
+
+    return (
+      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-800">
+            <tr>
+              {headers.map((header) => (
+                <th key={header} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                  {header.replace(/_/g, ' ')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+            {items.map((row: any, idx: number) => (
+              <tr key={idx} className="even:bg-gray-50/50 dark:even:bg-gray-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+                {headers.map((header) => (
+                  <td key={`${idx}-${header}`} className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 align-top">
+                    {renderCellContent(row[header])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Modal 
+          isOpen={showAuthModal} 
+          onClose={() => {
+            setShowAuthModal(false);
+            router.push("/");
+          }}
+          title="로그인 필요"
+        >
+          로그인 후 이용해 주세요.
+        </Modal>
+        <header className="mb-8 flex justify-between items-end">
+          <div className="flex items-center gap-4">
+            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <Image src={analysisIcon} alt="Analysis" width={40} height={40} className="object-contain" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">분석 결과 뷰어</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">RFP 문서를 AI로 분석하여 핵심 정보를 추출합니다.</p>
+            </div>
+          </div>
+          <UserHeader />
+        </header>
+
+        {/* 문서 선택 및 실행 */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-8">
+          <div className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">분석할 문서 선택</label>
+              <div className="relative">
+                <select
+                  value={selectedDocId}
+                  onChange={(e) => setSelectedDocId(e.target.value)}
+                  className="appearance-none block w-full pl-4 pr-10 py-3 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg border shadow-sm"
+                >
+                  {documents.map(doc => (
+                    <option key={doc.id || doc.doc_hash} value={doc.id || doc.doc_hash}>
+                      {doc.filename}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing || !selectedDocId}
+              className={`w-full sm:w-auto px-8 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white transition-all duration-200
+                ${analyzing || !selectedDocId 
+                  ? 'bg-indigo-400 cursor-not-allowed opacity-70' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                }`}
+            >
+              {analyzing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  분석 중...
+                </span>
+              ) : '분석 실행'}
+            </button>
+          </div>
+        </div>
+
+        {/* 에러 메시지 표시 */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-3 text-red-700 dark:text-red-400">
+            <svg className="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span className="font-medium">{error}</span>
+          </div>
+        )}
+
+        {/* 결과 뷰어 */}
+        {analyzing ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-100 border-t-indigo-600 mb-6"></div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">AI 분석 중입니다</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">문서의 크기에 따라 시간이 소요될 수 있습니다. 잠시만 기다려주세요.</p>
+          </div>
+        ) : result ? (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* 탭 헤더 */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700">
+              {['g1', 'g2', 'g3', 'g4'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 py-4 text-sm font-medium text-center transition-colors relative
+                    ${activeTab === tab 
+                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' 
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  {tab === 'g1' && '기본 정보 (G1)'}
+                  {tab === 'g2' && '일정 (G2)'}
+                  {tab === 'g3' && '자격 요건 (G3)'}
+                  {tab === 'g4' && '배점표 (G4)'}
+                  {activeTab === tab && (
+                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400"></div>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* 탭 내용 */}
+            <div className="p-6 bg-gray-50/30 dark:bg-gray-900/30 min-h-[400px]">
+              {activeTab === 'g1' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {renderSlot("사업명", result.g1?.project_name)}
+                  {renderSlot("발주기관", result.g1?.issuer)}
+                  {renderSlot("사업기간", result.g1?.period)}
+                  {renderSlot("사업예산", result.g1?.budget)}
+                </div>
+              )}
+              {activeTab === 'g2' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {renderSlot("제출 마감일", result.g2?.submission_deadline)}
+                  {renderSlot("설명회 일자", result.g2?.briefing_date)}
+                </div>
+              )}
+              {activeTab === 'g3' && (
+                <div className="grid grid-cols-1 gap-6">
+                  {renderSlot("필수 면허/자격", result.g3?.required_licenses)}
+                  {renderSlot("제한 사항", result.g3?.restrictions)}
+                </div>
+              )}
+              {activeTab === 'g4' && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+                    <span className="w-1 h-6 bg-indigo-500 rounded-full"></span>
+                    배점표 데이터
+                  </h3>
+                  {renderTable(result.g4)}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          !error && (
+            <div className="flex flex-col items-center justify-center py-24 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-dashed border-gray-300 dark:border-gray-700 text-center">
+              <div className="w-20 h-20 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6">
+                <span className="text-4xl">📊</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">분석 결과가 없습니다</h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                상단의 드롭다운에서 문서를 선택하고 <span className="font-semibold text-indigo-600 dark:text-indigo-400">분석 실행</span> 버튼을 클릭하여 AI 분석 결과를 확인하세요.
+              </p>
+            </div>
+          )
+        )}
+
+        {/* 댓글 섹션 */}
+        {selectedDocId && (
+          <CommentSection docHash={documents.find(d => (d.id || d.doc_hash) === selectedDocId)?.doc_hash || selectedDocId} />
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+
 import streamlit as st
 import pandas as pd
 from bidflow.ui.utils import get_documents, run_extraction
@@ -30,7 +34,7 @@ docs = get_documents()
 if not docs:
     st.warning(t("no_docs"))
 else:
-    doc_options = {d["filename"]: d["doc_hash"] for d in docs}
+    doc_options = {d["filename"]: d.get("id", d.get("doc_hash")) for d in docs}
     selected_filename = st.selectbox(t("select_doc"), list(doc_options.keys()))
     doc_hash = doc_options[selected_filename]
 

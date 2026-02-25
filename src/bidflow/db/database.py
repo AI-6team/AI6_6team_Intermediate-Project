@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     email         TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     team          TEXT DEFAULT '',
+    licenses      TEXT DEFAULT '',
     role          TEXT DEFAULT 'member',
     created_at    TEXT DEFAULT (datetime('now'))
 );
@@ -109,6 +110,12 @@ def migrate_schema() -> None:
         user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
         if "role" not in user_cols:
             conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'member'")
+            conn.commit()
+
+        # users.licenses 컬럼 추가
+        user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "licenses" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN licenses TEXT DEFAULT ''")
             conn.commit()
 
         # profiles 테이블: user_id → owner_key 마이그레이션

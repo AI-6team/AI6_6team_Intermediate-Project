@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+
 import streamlit as st
 import pandas as pd
 from bidflow.ui.utils import upload_file, get_documents, run_extraction
@@ -28,7 +32,7 @@ st.title(t("title"))
 # 1. 파일 업로드 섹션
 with st.container():
     st.subheader(t("upload_header"))
-    uploaded_file = st.file_uploader(t("upload_label"), type="pdf")
+    uploaded_file = st.file_uploader(t("upload_label"), type=["pdf", "hwp"])
     
     if uploaded_file is not None:
         if st.button(t("upload_btn"), type="primary"):
@@ -63,11 +67,16 @@ else:
     df = pd.DataFrame(docs)
     
     # UI에는 중요 정보만 표시
-    display_df = df[["filename", "upload_date", "doc_hash"]]
+    cols = ["filename", "upload_date"]
+    if "id" in df.columns:
+        cols.append("id")
+    elif "doc_hash" in df.columns:
+        cols.append("doc_hash")
+    display_df = df[cols]
     st.dataframe(display_df, width="stretch")
     
     # 선택된 문서에 대해 작업 수행 (파일명으로 선택하게 하고 ID 찾기)
-    doc_options = {d["filename"]: d["doc_hash"] for d in docs}
+    doc_options = {d["filename"]: d.get("id", d.get("doc_hash")) for d in docs}
     selected_filename = st.selectbox("Select Document to Analyze", list(doc_options.keys()))
     selected_doc_hash = doc_options[selected_filename]
     

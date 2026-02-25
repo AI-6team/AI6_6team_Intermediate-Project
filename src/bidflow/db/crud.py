@@ -19,6 +19,7 @@ def upsert_user(
     email: str,
     password_hash: str,
     team: str = "",
+    licenses: str = "",
     role: str = "member",
 ) -> None:
     """사용자를 삽입하거나 갱신합니다. role: 'member' | 'leader'"""
@@ -27,16 +28,36 @@ def upsert_user(
         with conn:
             conn.execute(
                 """
-                INSERT INTO users (username, name, email, password_hash, team, role)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO users (username, name, email, password_hash, team, licenses, role)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(username) DO UPDATE SET
                     name          = excluded.name,
                     email         = excluded.email,
                     password_hash = excluded.password_hash,
                     team          = excluded.team,
+                    licenses      = excluded.licenses,
                     role          = excluded.role
                 """,
-                (username, name, email, password_hash, team, role),
+                (username, name, email, password_hash, team, licenses, role),
+            )
+    finally:
+        conn.close()
+
+
+def update_user_profile(username: str, team: str, licenses: str) -> None:
+    """사용자의 프로필 정보(팀, 면허)를 갱신합니다."""
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET
+                    team = ?,
+                    licenses = ?
+                WHERE username = ?
+                """,
+                (team, licenses, username),
             )
     finally:
         conn.close()
@@ -152,30 +173,65 @@ def upsert_document(
 
 
 def get_document(doc_hash: str, user_id: str) -> Optional[Dict[str, Any]]:
-    """문서를 반환합니다. content_json은 dict로 파싱됩니다."""
+    """문서를 반환합니다. 본인 또는 같은 팀원의 문서를 조회합니다."""
     conn = get_connection()
     try:
+        # 1. 본인 문서 조회
         row = conn.execute(
             "SELECT * FROM documents WHERE doc_hash = ? AND user_id = ?",
             (doc_hash, user_id),
         ).fetchone()
-        if row is None:
-            return None
-        data = dict(row)
-        data["content"] = json.loads(data.pop("content_json"))
-        return data
+        
+        if row:
+            data = dict(row)
+            data["content"] = json.loads(data.pop("content_json"))
+            return data
+
+        # 2. 팀원 문서 조회
+        user = conn.execute("SELECT team FROM users WHERE username = ?", (user_id,)).fetchone()
+        team = user["team"] if user else ""
+        
+        if team:
+            sql = """
+                SELECT d.*
+                FROM documents d
+                JOIN users u ON d.user_id = u.username
+                WHERE d.doc_hash = ? AND u.team = ?
+                ORDER BY d.upload_date DESC
+                LIMIT 1
+            """
+            row = conn.execute(sql, (doc_hash, team)).fetchone()
+            if row:
+                data = dict(row)
+                data["content"] = json.loads(data.pop("content_json"))
+                return data
+
+        return None
     finally:
         conn.close()
 
 
 def list_documents(user_id: str) -> List[Dict[str, Any]]:
-    """사용자의 문서 메타데이터 목록을 반환합니다 (content 제외)."""
+    """사용자(및 같은 팀원)의 문서 메타데이터 목록을 반환합니다."""
     conn = get_connection()
     try:
-        rows = conn.execute(
-            "SELECT doc_hash, filename, upload_date FROM documents WHERE user_id = ? ORDER BY upload_date DESC",
-            (user_id,),
-        ).fetchall()
+        # 팀 정보 조회
+        user = conn.execute("SELECT team FROM users WHERE username = ?", (user_id,)).fetchone()
+        team = user["team"] if user else ""
+
+        sql = """
+            SELECT d.doc_hash, d.filename, d.upload_date, d.status, d.user_id, u.name as owner_name
+            FROM documents d
+            JOIN users u ON d.user_id = u.username
+            WHERE {}
+            ORDER BY d.upload_date DESC
+        """
+        
+        if team:
+            rows = conn.execute(sql.format("u.team = ?"), (team,)).fetchall()
+        else:
+            rows = conn.execute(sql.format("d.user_id = ?"), (user_id,)).fetchall()
+            
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -218,14 +274,35 @@ def upsert_extraction(
 
 
 def get_extraction(doc_hash: str, user_id: str) -> Optional[Dict[str, Any]]:
-    """추출 결과를 반환합니다."""
+    """추출 결과를 반환합니다. 본인 또는 팀원의 결과를 조회합니다."""
     conn = get_connection()
     try:
+        # 1. 본인 결과
         row = conn.execute(
             "SELECT result_json FROM extraction_results WHERE doc_hash = ? AND user_id = ?",
             (doc_hash, user_id),
         ).fetchone()
-        return json.loads(row["result_json"]) if row else None
+        if row:
+            return json.loads(row["result_json"])
+            
+        # 2. 팀원 결과
+        user = conn.execute("SELECT team FROM users WHERE username = ?", (user_id,)).fetchone()
+        team = user["team"] if user else ""
+        
+        if team:
+            sql = """
+                SELECT r.result_json
+                FROM extraction_results r
+                JOIN users u ON r.user_id = u.username
+                WHERE r.doc_hash = ? AND u.team = ?
+                ORDER BY r.created_at DESC
+                LIMIT 1
+            """
+            row = conn.execute(sql, (doc_hash, team)).fetchone()
+            if row:
+                return json.loads(row["result_json"])
+
+        return None
     finally:
         conn.close()
 
