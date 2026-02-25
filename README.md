@@ -1,129 +1,193 @@
 # BidFlow
 
-한국어 입찰제안요청서(RFP) 분석을 위한 AI 기반 RAG 시스템
+한국어 입찰제안요청서(RFP) 분석을 위한 보안 강화형 RAG 시스템
 
 ## 프로젝트 개요
 
-BidFlow는 공공기관 입찰 RFP 문서(HWP, PDF, DOCX, HWPX)를 업로드하면 자동으로 핵심 정보를 추출하고, 입찰 참여 적합성을 판정하는 시스템입니다.
+BidFlow는 공공기관 입찰 RFP 문서(HWP/PDF/DOCX/HWPX)를 업로드하면 핵심 정보를 자동 추출하고, 회사 프로필과 비교해 입찰 적격성(Go/No-Go)을 판단합니다.
 
-### 주요 기능
+## 주요 기능
 
-- **다중 포맷 파싱**: HWP(hwp5txt + hwp5html 하이브리드), PDF(PyMuPDF + pdfplumber), DOCX, HWPX 지원
-- **하이브리드 검색**: BM25 + Vector (Weighted RRF, alpha=0.7) + CrossEncoder Reranking
-- **멀티스텝 추출 (G1~G4)**: 사업 기본정보, 일정, 자격요건, 배점표를 단계별 LLM 체인으로 추출
-- **정규식 힌트 주입**: 금액/날짜 패턴을 사전 감지하여 LLM 정확도 향상
-- **쿼리 분석기**: 질문 유형(summary/extraction/decision) 자동 분류
-- **Front-loading**: 문서 앞부분 청크를 강제 포함하여 기본정보 recall 보장
-- **규칙 기반 판정**: 자격요건(면허, 신용등급, 지역제한) + 예산/마감일/정보완전성 검증
-- **보안**: 3-Rail 아키텍처 (Input Rail, HWP Deep Scan, PII Masking)
-- **Q&A**: RAG 기반 자유 질의응답
-
-## 팀원
-
-| 이름 | 역할 |
-|------|------|
-| 임창현 | RAG 파이프라인 설계, 13회 실험 최적화, 시스템 통합 |
-| 김보윤 | QueryAnalyzer, DecisionEngine, DOCX/HWPX 파서 |
-| 김슬기 | Front-loading 전략, 정규식 힌트 주입 |
+- **다중 포맷 파싱**: HWP(hwp5txt+hwp5html), PDF(PyMuPDF+pdfplumber), DOCX, HWPX
+- **업로드 UI 통합**: 문서 1개 업로드 시 단일 분석, 2개 이상 업로드 시 다문서 일괄 분석 자동 전환
+- **멀티스텝 추출(G1~G4)**: 기본정보, 일정/제출, 자격/결격, 배점표 단계 추출
+- **하이브리드 검색**: BM25 + Vector(Chroma) + Rerank(Weighted RRF)
+- **RAG 보강 전략**: 정규식 힌트 주입, Front-loading, Structure-aware 검색
+- **규칙 기반 검증**: 면허/신용/지역/마감 등 규칙 기반 판단
+- **인증/권한**: 회원가입/로그인, 역할(member/leader), 팀 단위 권한 분리
+- **팀 워크스페이스**: 팀 문서 합산 조회, 코멘트/답글, 문서별 판정 공유
+- **멀티테넌시**: 사용자별 스토리지/벡터DB/DB 레코드 분리
+- **보안**: Input/Output Rail, HWP Deep Scan, PII 필터, Tool Gate(SSRF 방어)
 
 ## 아키텍처
 
-```
+```text
 User (Streamlit UI)
   │
-  ├─ Upload ──→ RFPLoader ──→ Parser (HWP/PDF/DOCX/HWPX)
-  │                │              │
-  │                ▼              ▼
-  │           DocumentStore    VectorStore (ChromaDB)
-  │                               │
-  ├─ Q&A ────→ RAGChain ──→ HybridRetriever (BM25 + Vector)
-  │                │              │
-  │                │              ▼
-  │                │         Reranker (bge-reranker-v2-m3)
-  │                │              │
-  │                ▼              ▼
-  │           LLM (gpt-5-mini) ← Context
+  ├─ Auth/Login/Register (SQLite users, bcrypt, cookie)
   │
-  ├─ Extract ─→ ExtractionPipeline (G1→G2/G3→G4)
-  │                │
-  │                ▼
-  └─ Validate ─→ RuleBasedValidator ──→ 참여 권장/검토 필요/참여 보류
+  ├─ Upload(단일/다문서 자동 전환)
+  │    ├─ RFPLoader -> Parser(HWP/PDF/DOCX/HWPX)
+  │    ├─ DocumentStore(SQLite + file storage)
+  │    └─ VectorStoreManager(Chroma, user/tenant isolated)
+  │
+  ├─ ExtractionPipeline (G1 -> G2/G3 -> G4)
+  │
+  ├─ Retrieval/RAG
+  │    ├─ HybridRetriever(BM25 + Vector + RRF + Rerank)
+  │    └─ RAGChain(Structure-aware + Postprocess)
+  │
+  ├─ Validation (RuleBasedValidator)
+  │
+  └─ Team Workspace
+       ├─ team docs aggregation
+       └─ comments/replies (SQLite)
 ```
 
-## 실험 결과 요약
+## 실험 결과 종합 (최신화)
 
-13회 반복 실험을 통해 최적 설정을 도출했습니다.
+기준 문서: `docs/planning/HISTORY_v2_execution.md` (최종 업데이트: 2026-02-25)
 
-| 실험 | 내용 | 결과 (kw_v3) |
-|------|------|-------------|
-| EXP01~03 | 청킹, 검색, 프롬프트 기초 실험 | 0.72~0.81 |
-| EXP04~06 | 테이블 인식, 정규화, 파이프라인 개선 | 0.81~0.83 |
-| EXP07~09 | Table-aware RAG, EDA, 일반화 검증 | 0.83~0.86 |
-| EXP10 | HWP 파서 V4 하이브리드 + 멀티문서 검증 | 0.896 |
-| EXP11 | 프롬프트 엔지니어링 (과도 제약 역효과 확인) | < 0.896 |
-| EXP12 | Retrieval 최적화 (multi-query +0.4pp) | **0.900** |
-| EXP13 | Contextual Retrieval (한국어 RFP 비효과 확인) | < 0.896 |
+### 지표 정의
 
-**최적 설정**: chunk_size=500, alpha=0.7, pool_size=50, top_k=15, Prompt V2 (table-aware)
+- `kw_v3/v4/v5`: 정답 키워드 매칭 기반 핵심 지표(0~1). 버전이 올라갈수록 정규화/표현 유연 매칭이 강화됩니다.
+- `kw_v5b`: `kw_v5`에서 공백/괄호/슬래시 변형 매칭을 추가 보정한 지표입니다.
+- `Perfect`: 문항 단위 완전 정답(`kw=1.0`) 개수입니다.
+- `Gate`: split별 통과 기준(Dev `>=0.99`, Holdout `>=0.95`, Sealed `>=0.95`)입니다.
+- `Oracle`/`Non-oracle`: Oracle은 GT 의존 선택(연구용 상한), Non-oracle은 GT 비의존 선택(실운영 시나리오)입니다.
+- `Faithfulness`(RAGAS): 생성 답변이 검색 근거에 충실한지(환각 억제) 지표입니다.
+- `Context Recall`(RAGAS): 필요한 근거가 검색 컨텍스트에 포함되었는지 지표입니다.
+- `Stdev`: 동일 설정 반복 실행 시 점수 변동성(재현성) 지표입니다.
+
+### EXP01~EXP13 요약
+
+| 구간 | 핵심 내용 | 결과 요약 |
+|------|-----------|-----------|
+| EXP01~03 | 청킹/검색/프롬프트 기초 | baseline 확립 |
+| EXP04~06 | 테이블/정규화/파이프라인 개선 | 성능 안정화 |
+| EXP07~10 | table-aware + 파서 고도화 | 성능 상승 |
+| EXP11~13 | 프롬프트/컨텍스트 실험 | 효과/한계 확인 |
+
+### EXP14~EXP20 요약 (무엇을 했는지 + 결과)
+
+| 실험 | 무엇을 검증했는가 | 핵심 결과 |
+|------|------------------|-----------|
+| EXP14 | 오답 진단(실패 유형 분해) | imperfect 11건 분석, `gen_failure 6 / partial_retrieval 5` |
+| EXP15 | Generation 품질 개선 | `kw_v3=0.9258` |
+| EXP16 | 메트릭 v4 + SC 5-shot 검증 | `kw_v4=0.9534` |
+| EXP17 | 메트릭 v5 + 0.99 목표 도전 | `kw_v5=0.9547` (0.99 미달) |
+| EXP18 | GT 정제 + targeted prompt | `kw_v5=0.9851`, `28/30 perfect` |
+| EXP19 | 0.99 달성 + 과적합 검증 | Dev `kw_v5=0.9952`, Holdout raw `0.8821`(과적합 신호) |
+| EXP20(D9) | metric `v5b` 도입 | Overall `0.9799`, holdout/sealed gate 통과 |
+| EXP20v2(D10) | 평가 후처리로 gate 보완 | Overall `0.9874`, dev/holdout/sealed 3-gate 통과 |
+| EXP20v2(D10-R) | 동일 설정 3-run 재현성 점검 | overall gate pass-rate `33.3%` (불안정 확인) |
+
+### EXP21 상세: 일반화 성능 + 재현성 안정화
+
+EXP21은 D10-R 불안정을 줄이기 위해 안정화 백로그(P1~P5)를 분리 실험했습니다.
+
+- `P1`(`answer_postprocess=stability_v1`)이 최종 채택안
+- D10 대비 Holdout +3.84pp, Overall +0.95pp 개선
+- `P1` 단일 실행: Overall `0.9968`, Dev `1.0000`, Holdout `0.9933`, Sealed `0.9909`, Perfect `48/50`
+- `P1-R` 3-run 재현성: Dev/Holdout/Sealed/Overall gate 모두 `3/3 (100%)`
+- 결론: 성능뿐 아니라 반복 실행 안정성까지 충족
+
+### EXP22 상세: 평가 신뢰성 강화 (Non-oracle + 다차원 지표)
+
+EXP22는 "점수가 좋아 보이는가"가 아니라 "실운영 기준으로 믿을 수 있는가"를 검증한 단계입니다.
+
+- Oracle 누수 제거: `selection_mode=first_deterministic` (GT 비의존 선택)
+- 다차원 평가 추가: `kw_v5` + RAGAS(`Faithfulness`, `Context Recall`)
+- 3-run 반복으로 변동성 계측
+
+| 항목 | 결과 |
+|------|------|
+| Non-oracle `kw_v5` (3-run mean) | `0.9742` |
+| `kw_v5` stdev | `0.0104` |
+| Oracle `kw_v5` mean | `0.9974` |
+| Oracle gap mean | `2.33pp` |
+| Faithfulness (mean ± stdev) | `0.9402 ± 0.0045` |
+| Context Recall (mean ± stdev) | `0.9778 ± 0.0019` |
+| Gate 패턴 일관성 | 3-run 모두 `Dev FAIL / Holdout PASS / Sealed PASS` |
+
+해석:
+- Non-oracle 기준에서도 높은 점수와 낮은 변동성을 확인했습니다.
+- RAGAS를 추가해 근거 충실도/검색 충실도까지 함께 측정했습니다.
+- Gate 패턴이 3-run에서 동일하게 재현되어, 실패/성공 조건이 우연이 아닌 구조적 현상임을 확인했습니다.
 
 ## 프로젝트 구조
 
-```
+```text
 bidflow/
-├── configs/               # 설정 파일 (YAML)
-├── data/experiments/       # 실험 결과 (CSV, JSON)
-├── docs/                  # 문서 (발표 보고서 등)
-├── notebooks/             # 실험 노트북 (EXP01~10)
-├── scripts/               # 실험 스크립트 (EXP10~13)
+├── configs/                    # base/dev/prod/exp 설정
+├── data/                       # 로컬 데이터(대부분 gitignore)
+├── docs/
+│   └── planning/               # 실험/운영 계획 및 실행 문서
+├── scripts/                    # 실험/검증 실행 스크립트
 ├── src/bidflow/
-│   ├── apps/ui/           # Streamlit UI (Home, Upload, Matrix, Profile, Decision, Eval)
-│   ├── core/              # 설정 관리
-│   ├── domain/            # 도메인 모델 (Pydantic)
-│   ├── extraction/        # 멀티스텝 추출 (G1~G4 체인, 힌트 감지)
-│   ├── ingest/            # 문서 로딩, 저장, 벡터DB 관리
-│   ├── parsing/           # 파서 (HWP, PDF, DOCX, HWPX)
-│   ├── retrieval/         # RAG 체인, 하이브리드 검색, 리랭킹, 쿼리 분석
-│   ├── security/          # 보안 (Input Rail, PII Masking)
-│   └── validation/        # 규칙 기반 검증
-├── tests/                 # 테스트
-├── pyproject.toml         # 의존성
-└── bidflow.design.md      # 상세 설계서
+│   ├── api/                    # FastAPI API
+│   ├── apps/ui/                # Streamlit UI
+│   ├── db/                     # SQLite schema/CRUD
+│   ├── core/                   # config/util
+│   ├── domain/                 # pydantic 모델
+│   ├── extraction/             # G1~G4, batch pipeline
+│   ├── ingest/                 # loader/storage/vector 관리
+│   ├── parsing/                # 파일 파서
+│   ├── retrieval/              # RAG/hybrid/rerank/prompt
+│   ├── security/               # PII/tool_gate/rails
+│   └── validation/             # rule validator
+├── tests/
+│   └── security/               # 보안 테스트
+├── local_only/                 # 로컬 보관(HANDOFF/프롬프트 등, git 제외)
+└── pyproject.toml
 ```
 
-## 설치 및 실행
-
-### 1. 환경 설정
+## 설치
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+# source .venv/bin/activate
+
 pip install -e .
 ```
 
-### 2. 환경 변수
+## 환경 변수 (.env)
 
 ```bash
-# .env 파일 생성
-OPENAI_API_KEY=your-api-key
-LANGFUSE_SECRET_KEY=your-langfuse-key    # (선택)
-LANGFUSE_PUBLIC_KEY=your-langfuse-key    # (선택)
+OPENAI_API_KEY=your_openai_key
+
+# 선택
+LANGFUSE_SECRET_KEY=your_langfuse_secret
+LANGFUSE_PUBLIC_KEY=your_langfuse_public
+
+# FastAPI API key 매핑 (key:user,key:user)
+BIDFLOW_API_KEYS=sk-local-dev:admin
+
+# Streamlit authenticator cookie key
+BIDFLOW_COOKIE_KEY=replace_with_secure_random
 ```
 
-### 3. 실행
+## 실행
 
 ```bash
-# Streamlit UI
+# 통합 실행 (권장): FastAPI + Streamlit
+bidflow-run
+
+# 개별 실행
+uvicorn bidflow.main:app --reload
 streamlit run src/bidflow/apps/ui/Home.py
-
-# FastAPI 서버
-uvicorn src.bidflow.main:app --reload
 ```
 
-## 기술 스택
+## 테스트
 
-- **LLM**: GPT-5-mini (OpenAI)
-- **Embedding**: text-embedding-3-small
-- **Reranker**: BAAI/bge-reranker-v2-m3
-- **Vector DB**: ChromaDB
-- **Framework**: LangChain, FastAPI, Streamlit
-- **Observability**: Langfuse
+```bash
+pytest tests/security -q
+```
+
+## 데이터/보안 정책
+
+- `data/raw` 원본 데이터셋은 GitHub 업로드 금지
+- `HANDOFF`/프롬프트/개인 메모는 `local_only/`에 보관하고 Git 제외

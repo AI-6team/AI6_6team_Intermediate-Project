@@ -1,0 +1,43 @@
+# BidFlow 공통 기본값 설정
+# 환경별 오버라이드: dev.yaml, prod.yaml, exp_reproduce.yaml
+
+parsing:
+  strategy: layout_aware
+  table_strategy: layout
+  chunk_size: 500
+  chunk_overlap: 50
+  table_integrity_threshold: 0.7
+
+retrieval:
+  top_k: 20
+  hybrid_alpha: 0.7
+  rerank: true
+  rerank_pool: 50
+  rerank_model: BAAI/bge-reranker-v2-m3
+  structure_aware: true
+
+rag:
+  prompt_version: "v5"
+  answer_postprocess: "off"
+  postprocess_audit_log: false
+  sc_enabled: false
+  ragas_enabled: false
+
+model:
+  llm: gpt-5-mini
+  embedding: text-embedding-3-small
+
+signal:
+  green_threshold: 0.7
+  collection_ttl_days: 7
+  mandatory_slots:
+    - required_licenses
+    - financial_credit
+    - region_restriction
+  weights:
+    required_licenses: 3.0
+    financial_credit: 2.0
+    region_restriction: 2.0
+    budget_check: 1.0
+    deadline_check: 1.0
+    info_completeness: 1.0

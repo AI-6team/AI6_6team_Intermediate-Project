@@ -73,3 +73,29 @@ class RFPDocument(BaseModel):
     chunks: List[ParsedChunk] = Field(default_factory=list)
     tables: List[ParsedTable] = Field(default_factory=list)
     status: Literal["PROCESSING", "READY", "ERROR"] = "PROCESSING"
+
+# --- Multi-Document Signal Models ---
+
+class DocumentSignal(BaseModel):
+    doc_hash: str
+    doc_name: str
+    signal: Literal["GREEN", "RED", "GRAY"]
+    fit_score: float = Field(ge=0.0, le=1.0)
+    validation_results: List[ValidationResult] = Field(default_factory=list)
+    extraction_summary: Dict[str, Any] = Field(default_factory=dict)
+    signal_reasons: List[str] = Field(default_factory=list)
+    collection_name: str = ""
+    processing_time_sec: float = 0.0
+    faithfulness: Optional[float] = None
+    context_recall: Optional[float] = None
+    postprocess_log: Optional[List[Dict[str, Any]]] = None
+
+class BatchAnalysisResult(BaseModel):
+    results: List[DocumentSignal] = Field(default_factory=list)
+    total_docs: int = 0
+    green_count: int = 0
+    red_count: int = 0
+    gray_count: int = 0
+    created_at: str = ""
+    total_processing_time_sec: float = 0.0
+    failed_docs: List[Dict[str, str]] = Field(default_factory=list)

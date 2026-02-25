@@ -1,22 +1,25 @@
 from bidflow.ingest.storage import DocumentStore
 from bidflow.eval.ragas_runner import RagasRunner
+from bidflow.apps.ui.auth import require_login
 from langchain_core.documents import Document
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Evaluation", page_icon="📈")
 
+user_id = require_login()
+
 st.title("System Evaluation (RAGAS)")
 
 from bidflow.apps.ui.session import init_app_session
-init_app_session()
+init_app_session(user_id=user_id)
 
 if "current_doc_hash" not in st.session_state:
     st.warning("먼저 'Upload' 탭에서 문서를 분석해주세요.")
     st.stop()
 
 doc_hash = st.session_state["current_doc_hash"]
-store = DocumentStore()
+store = DocumentStore(user_id=user_id)
 doc = store.load_document(doc_hash)
 
 if not doc:
@@ -25,7 +28,6 @@ if not doc:
 
 st.write(f"Target Document: **{doc.filename}**")
 
-# 빈 청크 체크
 if not doc.chunks:
     st.error("분석된 청크가 없습니다. 먼저 문서를 업로드해주세요.")
     st.stop()
@@ -38,18 +40,15 @@ st.markdown("""
 
 if st.button("Run Evaluation (약 1~2분 소요)"):
     with st.spinner("1. 테스트셋 생성 중... (Synthetic Generation)"):
-        # LangChain Doc 변환
         lc_docs = [
-            Document(page_content=chunk.text, metadata=chunk.metadata) 
+            Document(page_content=chunk.text, metadata=chunk.metadata)
             for chunk in doc.chunks
         ]
-        
+
         runner = RagasRunner()
-        # 비용 절감을 위해 3개만 생성
         testset = runner.generate_testset(lc_docs, test_size=3)
         st.success(f"테스트셋 생성 완료 ({len(testset)} pairs)")
 
-        # v0.2+ 컬럼명 대응 (user_input, reference 등)
         display_cols = []
         for col in ["user_input", "question", "reference", "ground_truth"]:
             if col in testset.columns:
@@ -60,10 +59,8 @@ if st.button("Run Evaluation (약 1~2분 소요)"):
         results = runner.run_eval(testset)
         st.success("평가 완료!")
 
-        # 결과 표시
         st.subheader("Evaluation Scores")
 
-        # v0.2+ 메트릭 컬럼명 대응
         metric_cols = []
         col_mapping = {}
         if "faithfulness" in results.columns:
@@ -85,11 +82,9 @@ if st.button("Run Evaluation (약 1~2분 소요)"):
                 display_name = col_mapping.get(col_name, col_name)
                 cols[i].metric(display_name, f"{score:.2f}" if pd.notna(score) else "N/A")
 
-            # 차트
             st.bar_chart(avg_scores)
         else:
             st.warning("평가 메트릭을 찾을 수 없습니다.")
 
-        # 상세 데이터
         st.subheader("Detailed Results")
         st.dataframe(results)

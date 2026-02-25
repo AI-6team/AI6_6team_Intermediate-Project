@@ -1,0 +1,8 @@
+versions:
+  v5:
+    file: rag_v5.txt
+    description: "8규칙 TOC 활용, EXP21-22 검증"
+    variables: [context, question]
+    created: "2026-02-20"
+    validated_kw_v5: 0.974
+default: v5

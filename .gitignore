@@ -33,6 +33,7 @@ env/
 
 # Environment variables
 .env
+configs/users.yaml
 
 # Checkpoints
 .ipynb_checkpoints/
@@ -63,6 +64,9 @@ logs/
 *.sqlite3
 chroma_db/
 faiss_index/
+data/bidflow.db
+data/bidflow.db-wal
+data/bidflow.db-shm
 
 # Data layers (keep .gitkeep if needed, otherwise ignore contents)
 data/raw/*
@@ -77,6 +81,8 @@ data/eval/gold/*
 !data/eval/gold/.gitkeep
 data/eval/synthetic/*
 !data/eval/synthetic/.gitkeep
+data/accounts/
+data/shared/
 
 # Experiment VectorDB & binary data (keep CSV/JSON/PNG results)
 data/chroma_exp/
@@ -98,3 +104,22 @@ notebooks/data/
 
 # Collaboration logs (not needed for submission)
 협업일지/
+
+# Local-only handoff/prompt archives
+local_only/
+scripts/prompts/
+docs/planning/*HANDOFF*.md
+docs/planning/*handoff*.md
+docs/planning/*PROMPT*.md
+docs/planning/*prompt*.md
+
+# Local experiment runs (post-EXP13)
+data/exp*_holdout/
+data/test*/
+data/experiments/exp1[4-9]*
+data/experiments/exp2[0-9]*
+data/experiments/*holdout*
+data/experiments/*stability*
+data/experiments/*llmjudge*
+data/experiments/d*_eval_log.txt
+data/experiments/golden_testset_*

@@ -1,0 +1,12 @@
+# 실험 재현 프로파일 (EXP21 P1 / EXP22 동일 조건)
+# 운영(prod)과 분리된 재현 전용. gpt-5-mini + embedding-small 유지.
+env: exp_reproduce
+debug: true
+
+model:
+  llm: gpt-5-mini
+  embedding: text-embedding-3-small
+
+rag:
+  answer_postprocess: "stability_v1"
+  postprocess_audit_log: true

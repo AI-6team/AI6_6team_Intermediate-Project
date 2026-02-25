@@ -1,17 +1,15 @@
+# 프로덕션 환경 오버라이드 (base.yaml 위에 병합)
 env: production
 debug: false
 
 parsing:
-  strategy: layout_aware
-  table_strategy: layout
-  chunk_size: 500
   chunk_overlap: 100
   table_integrity_threshold: 0.85
-
-retrieval:
-  top_k: 10
-  rerank: true
 
 model:
   llm: gpt-5
   embedding: text-embedding-3-large
+
+rag:
+  answer_postprocess: "off"
+  postprocess_audit_log: true

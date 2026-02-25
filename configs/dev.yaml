@@ -1,20 +1,7 @@
+# 개발 환경 오버라이드 (base.yaml 위에 병합)
 env: development
 debug: true
 
-parsing:
-  strategy: layout_aware
-  table_strategy: layout
-  chunk_size: 500
-  chunk_overlap: 50
-  table_integrity_threshold: 0.7
-
-retrieval:
-  top_k: 15
-  rerank: true
-  rerank_pool: 50
-  rerank_model: BAAI/bge-reranker-v2-m3
-  hybrid_alpha: 0.7
-
-model:
-  llm: gpt-5-mini
-  embedding: text-embedding-3-small
+rag:
+  answer_postprocess: "stability_v1"
+  postprocess_audit_log: true

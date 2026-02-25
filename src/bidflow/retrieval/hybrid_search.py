@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -6,6 +6,7 @@ from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 from bidflow.ingest.storage import VectorStoreManager
 from bidflow.core.config import get_config
+
 
 class HybridRetriever(BaseRetriever):
     """
@@ -22,8 +23,23 @@ class HybridRetriever(BaseRetriever):
     pool_size: int = 50
     use_rerank: bool = False
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    tenant_id: str = "default"
+    user_id: Optional[str] = None
+    group_id: Optional[str] = None
+    doc_ids: Optional[List[str]] = None
+    acl_filter: Optional[Dict[str, Any]] = None
 
-    def __init__(self, vector_store_manager: VectorStoreManager = None, top_k: int = None, weights: List[float] = None, **kwargs):
+    def __init__(
+        self,
+        vector_store_manager: VectorStoreManager = None,
+        top_k: int = None,
+        weights: List[float] = None,
+        tenant_id: str = "default",
+        user_id: str = None,
+        group_id: str = None,
+        doc_ids: List[str] = None,
+        **kwargs,
+    ):
         """
         Args:
             vector_store_manager: 미리 초기화된 VectorStoreManager 인스턴스 (없으면 새로 생성)
@@ -48,20 +64,39 @@ class HybridRetriever(BaseRetriever):
         pool_size = retrieval_cfg.get("rerank_pool", 50) if isinstance(retrieval_cfg, dict) else 50
         rerank_model = retrieval_cfg.get("rerank_model", "BAAI/bge-reranker-v2-m3") if isinstance(retrieval_cfg, dict) else "BAAI/bge-reranker-v2-m3"
 
+        # 사용자/테넌트 기본값 정합: user_id가 주어졌는데 tenant_id가 default면 user_id를 tenant로 간주
+        effective_user_id = user_id
+        if effective_user_id is None and vector_store_manager is not None:
+            manager_user_id = getattr(vector_store_manager, "user_id", None)
+            if manager_user_id and manager_user_id != "global":
+                effective_user_id = manager_user_id
+
+        effective_tenant_id = tenant_id
+        if (not effective_tenant_id or effective_tenant_id == "default") and effective_user_id:
+            effective_tenant_id = effective_user_id
+
+        # ACL 필터
+        conditions = [{"tenant_id": effective_tenant_id}]
+        if effective_user_id:
+            conditions.append({"user_id": effective_user_id})
+        if group_id:
+            conditions.append({"group_id": group_id})
+        acl_filter = {"$and": conditions} if len(conditions) > 1 else conditions[0]
+
         # rerank 사용 시 후보군을 pool_size만큼 가져옴
         search_k = pool_size if use_rerank else top_k
 
         # 1. 컴포넌트 초기화
         if vector_store_manager is None:
-            vector_store_manager = VectorStoreManager()
+            vector_store_manager = VectorStoreManager(user_id=effective_user_id or "global")
 
-        vector_retriever = vector_store_manager.get_retriever(search_kwargs={"k": search_k})
+        vector_retriever = vector_store_manager.get_retriever(search_kwargs={"k": search_k, "filter": acl_filter})
 
-        # BM25 초기화 (전체 문서 로드 필요)
+        # BM25 초기화 (ACL 필터 기준 문서만 로드)
         all_docs = []
         try:
-             result = vector_store_manager.vector_db.get()
-             if result and result["documents"]:
+            result = vector_store_manager.vector_db.get(where=acl_filter)
+            if result and result["documents"]:
                 for i, text in enumerate(result["documents"]):
                     meta = result["metadatas"][i] if result["metadatas"] else {}
                     all_docs.append(Document(page_content=text, metadata=meta))
@@ -69,7 +104,7 @@ class HybridRetriever(BaseRetriever):
             print(f"Warning: Failed to fetch docs for BM25: {e}")
 
         if not all_docs:
-             bm25_retriever = BM25Retriever.from_documents([Document(page_content="empty", metadata={})])
+            bm25_retriever = None
         else:
             bm25_retriever = BM25Retriever.from_documents(all_docs)
             bm25_retriever.k = search_k
@@ -83,10 +118,19 @@ class HybridRetriever(BaseRetriever):
             pool_size=pool_size,
             use_rerank=use_rerank,
             rerank_model=rerank_model,
+            tenant_id=effective_tenant_id,
+            user_id=effective_user_id,
+            group_id=group_id,
+            doc_ids=doc_ids,
+            acl_filter=acl_filter,
             **kwargs
         )
 
         print(f"[HybridRetriever] weights={self.weights}, top_k={self.top_k}, rerank={self.use_rerank}, pool={self.pool_size}")
+
+    def set_doc_ids(self, doc_ids: Optional[List[str]]):
+        """검색 대상을 특정 문서 ID 목록으로 제한합니다."""
+        self.doc_ids = doc_ids
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -98,19 +142,39 @@ class HybridRetriever(BaseRetriever):
         search_k = self.pool_size if self.use_rerank else self.top_k
 
         # 1. 각 검색기 실행
-        try:
-            self.bm25_retriever.k = search_k * 2  # 후보군을 더 많이 가져옴
-            bm25_docs = self.bm25_retriever.invoke(query)
-        except Exception as e:
-            print(f"BM25 Error: {e}")
-            bm25_docs = []
+        bm25_docs = []
+        if self.bm25_retriever:
+            try:
+                self.bm25_retriever.k = search_k * 2  # 후보군을 더 많이 가져옴
+                bm25_docs = self.bm25_retriever.invoke(query)
+            except Exception as e:
+                print(f"BM25 Error: {e}")
 
         try:
+            # Vector 검색 시 doc_ids 필터 적용 (Query-time filtering)
+            current_filter = self.acl_filter.copy() if self.acl_filter else {}
+            if self.doc_ids:
+                doc_filter = {"doc_hash": {"$in": self.doc_ids}}
+                if current_filter:
+                    if "$and" in current_filter:
+                        final_filter = {"$and": current_filter["$and"] + [doc_filter]}
+                    else:
+                        final_filter = {"$and": [current_filter, doc_filter]}
+                else:
+                    final_filter = doc_filter
+            else:
+                final_filter = current_filter
+
             self.vector_retriever.search_kwargs["k"] = search_k * 2
+            self.vector_retriever.search_kwargs["filter"] = final_filter
             vector_docs = self.vector_retriever.invoke(query)
         except Exception as e:
             print(f"Vector Error: {e}")
             vector_docs = []
+
+        # BM25 결과도 doc_ids 필터 적용
+        if self.doc_ids:
+            bm25_docs = [doc for doc in bm25_docs if doc.metadata.get("doc_hash") in self.doc_ids]
 
         # 2. RRF (Reciprocal Rank Fusion) with Weights
         # rerank 사용 시 pool_size만큼, 아니면 top_k만큼 RRF 결과 가져옴

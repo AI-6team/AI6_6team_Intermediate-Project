@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from bidflow.extraction.chains import G1Chain, G2Chain, G3Chain, G4Chain
 from bidflow.extraction.hint_detector import HintDetector
-from bidflow.ingest.storage import VectorStoreManager
+from bidflow.ingest.storage import VectorStoreManager, StorageRegistry
 from bidflow.retrieval.hybrid_search import HybridRetriever
 from bidflow.domain.models import ComplianceMatrix, ExtractionSlot
 from bidflow.security.rails.input_rail import InputRail
@@ -12,9 +12,31 @@ class ExtractionPipeline:
     """
     RFP 추출 파이프라인 (G1 -> G2/G3 -> G4)
     """
-    def __init__(self):
-        self.vector_manager = VectorStoreManager()
-        self.retriever = HybridRetriever(self.vector_manager)
+    def __init__(
+        self,
+        vector_manager=None,
+        retriever=None,
+        user_id: str = "global",
+        tenant_id: str = None,
+        group_id: str = None,
+    ):
+        self.user_id = user_id or "global"
+        self.tenant_id = tenant_id or (self.user_id if self.user_id != "global" else "default")
+        self.group_id = group_id
+
+        if vector_manager is None:
+            from bidflow.core.config import get_config
+
+            registry = StorageRegistry(get_config("dev"))
+            vector_manager = VectorStoreManager(user_id=self.user_id, registry=registry)
+        self.vector_manager = vector_manager
+
+        self.retriever = retriever or HybridRetriever(
+            vector_store_manager=self.vector_manager,
+            tenant_id=self.tenant_id,
+            user_id=self.user_id if self.user_id != "global" else None,
+            group_id=self.group_id,
+        )
         self.g1_chain = G1Chain()
         self.g2_chain = G2Chain()
         self.g3_chain = G3Chain()
