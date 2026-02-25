@@ -66,9 +66,11 @@ class DocumentStore:
     파싱된 RFPDocument(JSON)와 원본 파일을 로컬 저장소에서 관리합니다.
     user_id가 주어지면 data/{user_id}/ 하위에, "global"이면 기존 data/ 하위에 저장합니다.
     """
-    def __init__(self, user_id: str = "global", registry: StorageRegistry = None):
+    def __init__(self, user_id: str = "global", registry: StorageRegistry = None, team_name: str = None):
         self.registry = registry or StorageRegistry()
         self.user_id = user_id
+        # 프로필 키: 팀 소속이면 team_name, 미소속이면 user_id
+        self.profile_key = team_name if team_name else user_id
 
         if user_id == "global":
             # 하위 호환: 기존 동작 유지
@@ -131,16 +133,16 @@ class DocumentStore:
         return crud.get_extraction(doc_hash, self.user_id)
 
     def save_profile(self, profile: Any) -> str:
-        """회사 프로필을 SQLite에 저장합니다."""
+        """회사 프로필을 SQLite에 저장합니다. 팀 소속이면 팀 공유 프로필로 저장됩니다."""
         data_to_save = profile
         if hasattr(profile, "model_dump"):
             data_to_save = profile.model_dump(mode="json")
-        crud.upsert_profile(self.user_id, data_to_save)
-        return f"sqlite:profiles/{self.user_id}"
+        crud.upsert_profile(self.profile_key, data_to_save)
+        return f"sqlite:profiles/{self.profile_key}"
 
     def load_profile(self) -> Optional[Dict[str, Any]]:
-        """저장된 회사 프로필을 로드합니다."""
-        return crud.get_profile(self.user_id)
+        """저장된 회사 프로필을 로드합니다. 팀 소속이면 팀 공유 프로필을 반환합니다."""
+        return crud.get_profile(self.profile_key)
 
     def save_session_state(self, state_dict: Dict[str, Any]):
         """현재 세션 상태를 SQLite에 저장합니다."""

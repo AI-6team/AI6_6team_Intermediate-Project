@@ -19,22 +19,24 @@ def upsert_user(
     email: str,
     password_hash: str,
     team: str = "",
+    role: str = "member",
 ) -> None:
-    """사용자를 삽입하거나 갱신합니다."""
+    """사용자를 삽입하거나 갱신합니다. role: 'member' | 'leader'"""
     conn = get_connection()
     try:
         with conn:
             conn.execute(
                 """
-                INSERT INTO users (username, name, email, password_hash, team)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO users (username, name, email, password_hash, team, role)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(username) DO UPDATE SET
                     name          = excluded.name,
                     email         = excluded.email,
                     password_hash = excluded.password_hash,
-                    team          = excluded.team
+                    team          = excluded.team,
+                    role          = excluded.role
                 """,
-                (username, name, email, password_hash, team),
+                (username, name, email, password_hash, team, role),
             )
     finally:
         conn.close()
@@ -60,6 +62,12 @@ def delete_user(username: str) -> None:
             conn.execute("DELETE FROM users WHERE username = ?", (username,))
     finally:
         conn.close()
+
+
+def get_user_role(username: str) -> str:
+    """사용자의 역할을 반환합니다. 'leader' 또는 'member'. 없으면 'member'."""
+    user = get_user(username)
+    return (user or {}).get("role", "member")
 
 
 def list_users() -> List[Dict[str, Any]]:
@@ -237,31 +245,35 @@ def delete_extraction(doc_hash: str, user_id: str) -> None:
 
 # ── profiles ─────────────────────────────────────────────────────────
 
-def upsert_profile(user_id: str, profile: Dict[str, Any]) -> None:
-    """회사 프로필을 삽입하거나 갱신합니다."""
+def upsert_profile(owner_key: str, profile: Dict[str, Any]) -> None:
+    """회사 프로필을 삽입하거나 갱신합니다.
+    owner_key: 팀 소속 사용자는 team_name, 미소속 사용자는 user_id.
+    """
     conn = get_connection()
     try:
         with conn:
             conn.execute(
                 """
-                INSERT INTO profiles (user_id, profile_json)
+                INSERT INTO profiles (owner_key, profile_json)
                 VALUES (?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
+                ON CONFLICT(owner_key) DO UPDATE SET
                     profile_json = excluded.profile_json,
                     updated_at   = datetime('now')
                 """,
-                (user_id, json.dumps(profile, ensure_ascii=False)),
+                (owner_key, json.dumps(profile, ensure_ascii=False)),
             )
     finally:
         conn.close()
 
 
-def get_profile(user_id: str) -> Optional[Dict[str, Any]]:
-    """회사 프로필을 반환합니다."""
+def get_profile(owner_key: str) -> Optional[Dict[str, Any]]:
+    """회사 프로필을 반환합니다.
+    owner_key: 팀 소속 사용자는 team_name, 미소속 사용자는 user_id.
+    """
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT profile_json FROM profiles WHERE user_id = ?", (user_id,)
+            "SELECT profile_json FROM profiles WHERE owner_key = ?", (owner_key,)
         ).fetchone()
         return json.loads(row["profile_json"]) if row else None
     finally:

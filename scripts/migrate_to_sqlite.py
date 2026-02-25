@@ -44,6 +44,7 @@ def migrate_users(yaml_path: Path) -> int:
             email=info.get("email", ""),
             password_hash=info.get("password", ""),
             team=info.get("team", ""),
+            role=info.get("role", "member"),
         )
         count += 1
         print(f"  [USER] {username}")

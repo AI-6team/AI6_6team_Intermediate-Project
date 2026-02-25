@@ -7,9 +7,13 @@ def init_app_session(user_id: str = "global"):
     """
     모든 페이지에서 공통으로 호출.
     저장된 세션 상태와 프로필을 로드하여 st.session_state에 복원.
-    user_id가 주어지면 해당 사용자 공간에서 로드합니다.
+    팀 소속 사용자는 팀 공유 프로필을 사용합니다.
     """
-    store = DocumentStore(user_id=user_id)
+    team_name = None
+    if user_id != "global":
+        from bidflow.apps.ui.auth import get_user_team
+        team_name = get_user_team(user_id) or None
+    store = DocumentStore(user_id=user_id, team_name=team_name)
 
     # 1. 세션 상태 복원 (Doc Hash, Extraction results)
     if "current_doc_hash" not in st.session_state:

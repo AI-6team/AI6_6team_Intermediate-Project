@@ -22,6 +22,11 @@ def get_user_team(username: str) -> str:
     return get_user_info(username).get("team", "")
 
 
+def get_user_role(username: str) -> str:
+    """사용자의 역할을 반환합니다. 'leader' 또는 'member'."""
+    return crud.get_user_role(username)
+
+
 def get_team_members(team_name: str) -> list[dict]:
     """
     같은 팀에 속한 사용자 목록을 반환합니다.
@@ -140,6 +145,13 @@ def register_form() -> bool:
             new_email = st.text_input("이메일 *", placeholder="user@example.com")
             new_team = st.text_input("소속 팀", placeholder="예: AI6_team1 (없으면 비워두세요)")
 
+        new_role = st.radio(
+            "역할",
+            ["member", "leader"],
+            format_func=lambda x: "팀원 (Member)" if x == "member" else "팀장 (Leader)",
+            horizontal=True,
+        )
+
         new_password = st.text_input("비밀번호 *", type="password", placeholder="6자 이상")
         new_password2 = st.text_input("비밀번호 확인 *", type="password")
 
@@ -181,6 +193,7 @@ def register_form() -> bool:
         email=new_email,
         password_hash=hashed,
         team=new_team.strip(),
+        role=new_role,
     )
 
     # 스토리지 공간 초기화

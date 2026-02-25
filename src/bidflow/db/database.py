@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     email         TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     team          TEXT DEFAULT '',
+    role          TEXT DEFAULT 'member',
     created_at    TEXT DEFAULT (datetime('now'))
 );
 
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS extraction_results (
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
-    user_id      TEXT PRIMARY KEY,
+    owner_key    TEXT PRIMARY KEY,
     profile_json TEXT NOT NULL,
     updated_at   TEXT DEFAULT (datetime('now'))
 );
@@ -100,11 +101,41 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def migrate_schema() -> None:
+    """기존 DB에 누락된 컬럼/테이블 변경을 적용합니다."""
+    conn = get_connection()
+    try:
+        # users.role 컬럼 추가
+        user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "role" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'member'")
+            conn.commit()
+
+        # profiles 테이블: user_id → owner_key 마이그레이션
+        prof_cols = [r[1] for r in conn.execute("PRAGMA table_info(profiles)").fetchall()]
+        if prof_cols and "owner_key" not in prof_cols:
+            conn.executescript("""
+                ALTER TABLE profiles RENAME TO profiles_old;
+                CREATE TABLE profiles (
+                    owner_key    TEXT PRIMARY KEY,
+                    profile_json TEXT NOT NULL,
+                    updated_at   TEXT DEFAULT (datetime('now'))
+                );
+                INSERT INTO profiles (owner_key, profile_json, updated_at)
+                    SELECT user_id, profile_json, updated_at FROM profiles_old;
+                DROP TABLE profiles_old;
+            """)
+            conn.commit()
+    finally:
+        conn.close()
+
+
 def init_db() -> None:
-    """앱 시작 시 1회 호출 — 테이블이 없으면 생성합니다."""
+    """앱 시작 시 1회 호출 — 테이블이 없으면 생성하고, 스키마를 마이그레이션합니다."""
     conn = get_connection()
     try:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
     finally:
         conn.close()
+    migrate_schema()
