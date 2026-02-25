@@ -1,11 +1,11 @@
 import os
-import json
 import shutil
 from typing import List, Optional, Dict, Any
 from bidflow.domain.models import RFPDocument, ParsedChunk
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document as LancChainDocument
+from bidflow.db import crud
 
 
 class StorageRegistry:
@@ -87,108 +87,68 @@ class DocumentStore:
 
     def save_document(self, doc: RFPDocument) -> str:
         """
-        RFPDocument 메타데이터와 콘텐츠를 JSON으로 저장합니다.
-        저장된 파일 경로를 반환합니다.
+        RFPDocument 메타데이터와 콘텐츠를 SQLite에 저장합니다.
+        원본 파일 사본은 raw 디렉토리에 유지합니다.
         """
-        file_name = f"{doc.doc_hash}.json"
-        save_path = os.path.join(self.processed_path, file_name)
-
         # 원본 파일 사본 저장 (없는 경우)
         raw_copy_path = os.path.join(self.raw_path, doc.filename)
         if not os.path.exists(raw_copy_path) and os.path.exists(doc.file_path):
             shutil.copy2(doc.file_path, raw_copy_path)
 
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(doc.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
-
-        return save_path
+        upload_date = doc.upload_date.isoformat() if doc.upload_date else None
+        crud.upsert_document(
+            doc_hash=doc.doc_hash,
+            user_id=self.user_id,
+            filename=doc.filename,
+            file_path=doc.file_path,
+            status=doc.status if hasattr(doc, "status") else "READY",
+            upload_date=upload_date,
+            content=doc.model_dump(mode="json"),
+        )
+        return f"sqlite:documents/{self.user_id}/{doc.doc_hash}"
 
     def load_document(self, doc_hash: str) -> Optional[RFPDocument]:
-        """해시를 사용하여 RFPDocument를 로드합니다."""
-        file_name = f"{doc_hash}.json"
-        load_path = os.path.join(self.processed_path, file_name)
-
-        if not os.path.exists(load_path):
+        """SQLite에서 RFPDocument를 로드합니다."""
+        data = crud.get_document(doc_hash, self.user_id)
+        if data is None:
             return None
-
-        with open(load_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return RFPDocument(**data)
+        return RFPDocument(**data["content"])
 
     def list_documents(self) -> List[Dict[str, Any]]:
         """저장된 문서의 메타데이터 목록을 반환합니다."""
-        results = []
-        files = os.listdir(self.processed_path)
-        for f in files:
-            if f.endswith(".json") and not f.endswith("_result.json"):
-                doc_hash = f.replace(".json", "")
-                doc = self.load_document(doc_hash)
-                if doc:
-                    results.append({
-                        "doc_hash": doc.doc_hash,
-                        "filename": doc.filename,
-                        "upload_date": doc.upload_date.isoformat() if doc.upload_date else None
-                    })
-        return results
+        return crud.list_documents(self.user_id)
 
     def save_extraction_result(self, doc_hash: str, result: Dict[str, Any]) -> str:
-        """
-        추출 결과(Matrix)를 JSON으로 저장합니다.
-        경로: {processed_path}/{doc_hash}_result.json
-        """
-        file_name = f"{doc_hash}_result.json"
-        save_path = os.path.join(self.processed_path, file_name)
-
+        """추출 결과(Matrix)를 SQLite에 저장합니다."""
         data_to_save = result
         if hasattr(result, "model_dump"):
             data_to_save = result.model_dump(mode="json")
-
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(data_to_save, f, ensure_ascii=False, indent=2)
-
-        return save_path
+        crud.upsert_extraction(doc_hash, self.user_id, data_to_save)
+        return f"sqlite:extraction_results/{self.user_id}/{doc_hash}"
 
     def load_extraction_result(self, doc_hash: str) -> Optional[Dict[str, Any]]:
         """저장된 추출 결과를 로드합니다."""
-        file_name = f"{doc_hash}_result.json"
-        load_path = os.path.join(self.processed_path, file_name)
-
-        if not os.path.exists(load_path):
-            return None
-
-        with open(load_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return crud.get_extraction(doc_hash, self.user_id)
 
     def save_profile(self, profile: Any) -> str:
-        """회사 프로필을 JSON으로 저장합니다."""
+        """회사 프로필을 SQLite에 저장합니다."""
         data_to_save = profile
         if hasattr(profile, "model_dump"):
             data_to_save = profile.model_dump(mode="json")
-
-        with open(self.profile_path, "w", encoding="utf-8") as f:
-            json.dump(data_to_save, f, ensure_ascii=False, indent=2)
-
-        return self.profile_path
+        crud.upsert_profile(self.user_id, data_to_save)
+        return f"sqlite:profiles/{self.user_id}"
 
     def load_profile(self) -> Optional[Dict[str, Any]]:
         """저장된 회사 프로필을 로드합니다."""
-        if not os.path.exists(self.profile_path):
-            return None
-
-        with open(self.profile_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return crud.get_profile(self.user_id)
 
     def save_session_state(self, state_dict: Dict[str, Any]):
-        """현재 세션 상태(마지막 문서 ID 등)를 저장합니다."""
-        with open(self.session_path, "w", encoding="utf-8") as f:
-            json.dump(state_dict, f, ensure_ascii=False, indent=2)
+        """현재 세션 상태를 SQLite에 저장합니다."""
+        crud.upsert_session(self.user_id, state_dict)
 
     def load_session_state(self) -> Optional[Dict[str, Any]]:
         """저장된 세션 상태를 로드합니다."""
-        if not os.path.exists(self.session_path):
-            return None
-        with open(self.session_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return crud.get_session(self.user_id)
 
 
 class VectorStoreManager:

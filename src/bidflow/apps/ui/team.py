@@ -1,49 +1,19 @@
 """
 팀 워크스페이스 유틸리티.
-팀별 문서 코멘트를 data/shared/teams/{team_name}/comments/{doc_hash}.json 에 저장합니다.
+팀별 문서 코멘트를 SQLite의 comments/replies 테이블에 저장합니다.
 """
-import json
-import uuid
-from datetime import datetime
-from pathlib import Path
-
-from bidflow.ingest.storage import StorageRegistry
-
-
-def _comments_path(team_name: str, doc_hash: str) -> Path:
-    reg = StorageRegistry()
-    reg.ensure_team_spaces(team_name)
-    return Path(reg.team_space(team_name, "comments")) / f"{doc_hash}.json"
+from bidflow.db import crud
 
 
 def load_comments(team_name: str, doc_hash: str) -> list[dict]:
-    """해당 문서의 코멘트 목록을 반환합니다."""
-    path = _comments_path(team_name, doc_hash)
-    if not path.exists():
-        return []
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _save_comments(team_name: str, doc_hash: str, comments: list[dict]):
-    path = _comments_path(team_name, doc_hash)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(comments, f, ensure_ascii=False, indent=2)
+    """해당 문서의 코멘트 목록(답글 포함)을 반환합니다."""
+    return crud.get_comments(team_name, doc_hash)
 
 
 def add_comment(team_name: str, doc_hash: str, author: str, author_name: str, text: str) -> list[dict]:
-    """최상위 코멘트를 추가합니다."""
-    comments = load_comments(team_name, doc_hash)
-    comments.append({
-        "id": str(uuid.uuid4()),
-        "author": author,
-        "author_name": author_name,
-        "text": text.strip(),
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "replies": [],
-    })
-    _save_comments(team_name, doc_hash, comments)
-    return comments
+    """최상위 코멘트를 추가하고 갱신된 목록을 반환합니다."""
+    crud.add_comment(team_name, doc_hash, author, author_name, text)
+    return load_comments(team_name, doc_hash)
 
 
 def add_reply(
@@ -54,28 +24,15 @@ def add_reply(
     author_name: str,
     text: str,
 ) -> list[dict]:
-    """특정 코멘트에 답글을 추가합니다."""
-    comments = load_comments(team_name, doc_hash)
-    for comment in comments:
-        if comment["id"] == comment_id:
-            comment["replies"].append({
-                "id": str(uuid.uuid4()),
-                "author": author,
-                "author_name": author_name,
-                "text": text.strip(),
-                "created_at": datetime.now().isoformat(timespec="seconds"),
-            })
-            break
-    _save_comments(team_name, doc_hash, comments)
-    return comments
+    """특정 코멘트에 답글을 추가하고 갱신된 목록을 반환합니다."""
+    crud.add_reply(comment_id, author, author_name, text)
+    return load_comments(team_name, doc_hash)
 
 
 def delete_comment(team_name: str, doc_hash: str, comment_id: str, requester: str) -> list[dict]:
-    """작성자 본인 코멘트를 삭제합니다."""
-    comments = load_comments(team_name, doc_hash)
-    comments = [c for c in comments if not (c["id"] == comment_id and c["author"] == requester)]
-    _save_comments(team_name, doc_hash, comments)
-    return comments
+    """작성자 본인 코멘트를 삭제하고 갱신된 목록을 반환합니다."""
+    crud.delete_comment(comment_id, requester)
+    return load_comments(team_name, doc_hash)
 
 
 def delete_reply(
@@ -85,17 +42,9 @@ def delete_reply(
     reply_id: str,
     requester: str,
 ) -> list[dict]:
-    """작성자 본인 답글을 삭제합니다."""
-    comments = load_comments(team_name, doc_hash)
-    for comment in comments:
-        if comment["id"] == comment_id:
-            comment["replies"] = [
-                r for r in comment["replies"]
-                if not (r["id"] == reply_id and r["author"] == requester)
-            ]
-            break
-    _save_comments(team_name, doc_hash, comments)
-    return comments
+    """작성자 본인 답글을 삭제하고 갱신된 목록을 반환합니다."""
+    crud.delete_reply(reply_id, requester)
+    return load_comments(team_name, doc_hash)
 
 
 def get_team_documents(team_members: list[dict]) -> list[dict]:

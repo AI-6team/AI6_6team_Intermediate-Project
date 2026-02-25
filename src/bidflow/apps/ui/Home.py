@@ -1,6 +1,8 @@
 import streamlit as st
 from bidflow.utils.fonts import set_korean_font
+from bidflow.db.database import init_db
 
+init_db()
 set_korean_font()
 
 st.set_page_config(

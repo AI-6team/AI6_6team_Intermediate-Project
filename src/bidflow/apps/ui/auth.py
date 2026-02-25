@@ -1,35 +1,20 @@
 import os
 import re
 import shutil
-from pathlib import Path
-import yaml
-import bcrypt
 import streamlit as st
+import bcrypt
 from dotenv import load_dotenv
 
+from bidflow.db import crud
+
 load_dotenv()
-
-_USERS_YAML_PATH = Path(__file__).parent.parent.parent.parent.parent / "configs" / "users.yaml"
-
-
-# ── 설정 파일 I/O ────────────────────────────────────────────────────
-
-def _load_config() -> dict:
-    with open(_USERS_YAML_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def _save_config(config: dict):
-    with open(_USERS_YAML_PATH, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
 
 # ── 팀 정보 조회 ─────────────────────────────────────────────────────
 
 def get_user_info(username: str) -> dict:
     """사용자 정보(name, email, team)를 반환합니다."""
-    config = _load_config()
-    return config["credentials"]["usernames"].get(username, {})
+    return crud.get_user(username) or {}
 
 
 def get_user_team(username: str) -> str:
@@ -43,14 +28,7 @@ def get_team_members(team_name: str) -> list[dict]:
     반환 형식: [{"username": ..., "name": ...}, ...]
     빈 문자열 팀은 개인 공간으로 취급하여 빈 리스트 반환.
     """
-    if not team_name:
-        return []
-    config = _load_config()
-    members = []
-    for uname, info in config["credentials"]["usernames"].items():
-        if info.get("team", "") == team_name:
-            members.append({"username": uname, "name": info.get("name", uname)})
-    return members
+    return crud.get_team_members(team_name)
 
 
 # ── 계정 관리 ────────────────────────────────────────────────────────
@@ -60,10 +38,7 @@ def deactivate_account(username: str, delete_data: bool = False):
     계정을 삭제합니다.
     delete_data=True 이면 data/accounts/{username}/ 디렉토리도 함께 삭제합니다.
     """
-    config = _load_config()
-    if username in config["credentials"]["usernames"]:
-        del config["credentials"]["usernames"][username]
-        _save_config(config)
+    crud.delete_user(username)
 
     if delete_data:
         from bidflow.ingest.storage import StorageRegistry
@@ -75,23 +50,26 @@ def deactivate_account(username: str, delete_data: bool = False):
 # ── Streamlit-Authenticator ──────────────────────────────────────────
 
 def load_authenticator():
-    """users.yaml + 환경변수를 읽어 Authenticate 객체와 config를 반환합니다."""
+    """SQLite에서 사용자 정보를 읽어 Authenticate 객체와 config를 반환합니다."""
     import streamlit_authenticator as stauth
 
-    config = _load_config()
+    credentials = crud.get_credentials_dict()
     cookie_key = os.getenv("BIDFLOW_COOKIE_KEY")
     if not cookie_key:
         raise RuntimeError(
             "BIDFLOW_COOKIE_KEY 환경변수가 설정되지 않았습니다. .env 파일을 확인하세요."
         )
 
+    cookie_name = "bidflow_auth_cookie"
+    expiry_days = 7
+
     authenticator = stauth.Authenticate(
-        config["credentials"],
-        config["cookie"]["name"],
+        credentials,
+        cookie_name,
         cookie_key,
-        config["cookie"]["expiry_days"],
+        expiry_days,
     )
-    return authenticator, config
+    return authenticator, {"credentials": credentials, "cookie": {"name": cookie_name, "expiry_days": expiry_days}}
 
 
 def require_login() -> str:
@@ -151,7 +129,7 @@ def require_login() -> str:
 
 def register_form() -> bool:
     """
-    회원가입 폼을 표시합니다. 성공 시 users.yaml 저장 후 True 반환.
+    회원가입 폼을 표시합니다. 성공 시 SQLite에 저장 후 True 반환.
     """
     with st.form("register_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -191,20 +169,19 @@ def register_form() -> bool:
         st.error("팀명은 영문, 숫자, 밑줄, 한글만 사용할 수 있습니다.")
         return False
 
-    config = _load_config()
-    if new_username in config["credentials"]["usernames"]:
+    if crud.get_user(new_username) is not None:
         st.error(f"'{new_username}'은 이미 사용 중인 사용자명입니다.")
         return False
 
     # 등록
     hashed = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
-    config["credentials"]["usernames"][new_username] = {
-        "email": new_email,
-        "name": new_name,
-        "password": hashed,
-        "team": new_team.strip(),
-    }
-    _save_config(config)
+    crud.upsert_user(
+        username=new_username,
+        name=new_name,
+        email=new_email,
+        password_hash=hashed,
+        team=new_team.strip(),
+    )
 
     # 스토리지 공간 초기화
     from bidflow.ingest.storage import StorageRegistry

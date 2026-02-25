@@ -67,6 +67,11 @@ logs/
 chroma_db/
 faiss_index/
 
+# BidFlow SQLite DB (런타임 생성, 민감 데이터 포함)
+data/bidflow.db
+data/bidflow.db-wal
+data/bidflow.db-shm
+
 # Data layers (keep .gitkeep if needed, otherwise ignore contents)
 data/raw/*
 !data/raw/.gitkeep
