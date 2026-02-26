@@ -117,6 +117,13 @@ Data Layer
   - 문서 범위 필터(doc_hash) + ACL 필터(tenant/user/group)
   - Structure-aware (TOC 감지 + chapter prefix)
   - 힌트 주입(정규식), front-loading, answer postprocess 전략 지원
+- 최종 확정 설정 (EXP22 기준):
+  - chunk=500, overlap=50, hybrid alpha=0.7, top_k=20, pool_size=50
+  - Reranker: BAAI/bge-reranker-v2-m3, Embedding: text-embedding-3-small
+  - Prompt V5 (8규칙), SC 5회 (temp 0.0~0.5), stability_v1 후처리
+  - 운영 선택: first_deterministic (temp=0.0), oracle gap 2.33pp
+
+> 설정값별 확정 근거는 [종합 보고서 > 4.7 최종 확정 파이프라인 설정](docs/최종_종합보고서.md#47-최종-확정-파이프라인-설정-exp21-p1--exp22-기준) 참고
 
 ### 4.5 G1~G4 멀티스텝 추출
 
@@ -242,6 +249,14 @@ Data Layer
   - Context Recall `0.9778 ± 0.0019`
 - 결론: 고점 성능뿐 아니라 실운영 기준(비-GT 의존) 신뢰성 검증 완료
 
+주요 지표 설명:
+
+- `kw_v5`: GT 키워드가 응답에 포함되는 비율. 정규화(조사 제거, 동의어 치환, 어미 제거 등) 후 3단계 매칭. v2→v3→v4→v5로 진화하며 한국어 RFP 특성에 맞춰 정교화
+- `Gate`: split별(dev≥0.99, holdout/sealed≥0.95) kw_v5 평균 임계치 통과 여부
+- `Oracle/Non-oracle`: SC 5회 생성 후 GT 기반 최선 선택(oracle) vs temp=0.0 고정 선택(non-oracle). oracle gap=2.33pp
+- `Faithfulness/Context Recall`: RAGAS 표준 지표. 응답 근거 충실도 / 컨텍스트 회수율
+
+> 지표 계산식 상세 및 버전별 변경점은 [종합 보고서 > 3.2 지표](docs/최종_종합보고서.md#32-지표) 참고
 > 실험별 의사결정 로그(막힘→다음 실험 연결)와 상세 수치는 [종합 보고서 > 4. 실험 여정](docs/최종_종합보고서.md#4-실험-여정-막힘과-다음-실험의-연결) 참고
 
 ## 7) 프로젝트 구조
