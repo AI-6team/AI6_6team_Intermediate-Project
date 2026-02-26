@@ -226,6 +226,13 @@ Data Layer
 - `docs/planning/EXP21_phase_stability_execution.md`
 - `docs/planning/EXP22_llmjudge_execution.md`
 
+실험 여정 요약:
+
+- **EXP01~03 (baseline 수립)**: 청킹/검색/프롬프트 최적화. chunk=500, hybrid alpha=0.5, 한국어 zero-shot 프롬프트 확정. 한국어 프롬프트 전환만으로 Faithfulness +10pp 향상
+- **EXP04~07 (단일문서 고도화)**: verbatim 추출(+22pp), elbow 컷오프(+5.5pp), 테이블 구조화 등 개별 기법 기여 분리. 3-run 반복 검증 프로토콜 도입
+- **EXP08~09 (일반화 검증)**: 100문서 EDA(96 HWP + 4 PDF) 후 다문서 검증에서 worst-group KW 0.258로 폭락 → 과적합 확인, 다문서 기준으로 전환
+- **EXP10~18 (정밀 개선)**: V4_hybrid 파서, 오답 유형 분해(gen vs retrieval), self-consistency, metric v5 도입으로 단계적 개선
+
 핵심 결과:
 
 - EXP21(P1)에서 성능+안정성 동시 확보: `overall 0.9968`, 3-run gate pass `100%`
