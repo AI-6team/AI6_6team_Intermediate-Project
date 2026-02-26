@@ -94,6 +94,42 @@ export default function Sidebar() {
         <SidebarLink href="/dashboard" icon={dashboardIcon} label="문서 대시보드" />
         <SidebarLink href="/analysis" icon={analysisIcon} label="분석 결과" />
         <SidebarLink href="/validation" icon={validationIcon} label="자격 검증" />
+
+        <div className="my-2 border-t border-gray-100 dark:border-gray-700" />
+
+        <Link
+          href="/team"
+          className={`relative group flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-md ${
+            isCollapsed ? 'justify-center' : ''
+          }`}
+        >
+          <div className="w-6 h-6 flex items-center justify-center shrink-0 text-base">
+            👥
+          </div>
+          {!isCollapsed && <span className="ml-3 whitespace-nowrap">팀 워크스페이스</span>}
+          {isCollapsed && (
+            <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
+              팀 워크스페이스
+            </span>
+          )}
+        </Link>
+
+        <Link
+          href="/profile"
+          className={`relative group flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-md ${
+            isCollapsed ? 'justify-center' : ''
+          }`}
+        >
+          <div className="w-6 h-6 flex items-center justify-center shrink-0 text-base">
+            🏢
+          </div>
+          {!isCollapsed && <span className="ml-3 whitespace-nowrap">회사 프로필</span>}
+          {isCollapsed && (
+            <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md">
+              회사 프로필
+            </span>
+          )}
+        </Link>
       </nav>
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">

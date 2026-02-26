@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { apiUrl } from '@/lib/api';
 
 interface Reply {
   id: string;
@@ -36,7 +37,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await fetch("http://localhost:8000/auth/me", {
+      const res = await fetch(apiUrl("/auth/me"), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -52,7 +53,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
     const token = localStorage.getItem("token");
     if (!token || !docHash) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/comments/${docHash}`, {
+      const res = await fetch(apiUrl(`/api/v1/comments/${docHash}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -70,7 +71,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
     if (!token) return;
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/comments", {
+      const res = await fetch(apiUrl("/api/v1/comments"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -97,7 +98,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
     if (!token) return;
 
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/comments/${commentId}/replies`, {
+      const res = await fetch(apiUrl(`/api/v1/comments/${commentId}/replies`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,7 +122,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
     if (!token) return;
 
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/${type}/${id}`, {
+      const res = await fetch(apiUrl(`/api/v1/${type}/${id}`), {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -33,8 +33,13 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def get_project_root() -> Path:
+    """프로젝트 루트 디렉토리(bidflow/)의 절대 경로를 반환합니다."""
+    return Path(__file__).resolve().parent.parent.parent.parent
+
+
 def get_config(env="dev"):
-    root_dir = Path(__file__).resolve().parent.parent.parent.parent
+    root_dir = get_project_root()
     # 1. base.yaml 로드 (공통 기본값)
     base_path = root_dir / "configs" / "base.yaml"
     config = _load_yaml(base_path)

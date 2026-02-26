@@ -21,8 +21,8 @@ from bidflow.validation.validator import RuleBasedValidator
 
 
 def compute_content_hash(file_path: str) -> str:
-    """파일 내용의 SHA256 해시 (경로가 아닌 내용 기준)."""
-    h = hashlib.sha256()
+    """파일 내용의 MD5 해시 (RFPLoader/DocumentStore doc_hash 규칙과 정합)."""
+    h = hashlib.md5()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
@@ -259,11 +259,45 @@ class BatchPipeline:
 
     def _parse_and_index(self, file_path: str, doc_hash: str, vsm: VectorStoreManager):
         """문서 파싱 후 ChromaDB 인덱싱."""
-        from bidflow.ingest.loader import RFPLoader
+        from bidflow.domain.models import RFPDocument
+        from bidflow.parsing.pdf_parser import PDFParser
+        from bidflow.parsing.hwp_parser import HWPParser
+        from bidflow.parsing.docx_parser import DOCXParser
+        from bidflow.parsing.hwpx_parser import HWPXParser
 
-        loader = RFPLoader()
-        rfp_doc = loader.load(file_path)
-        rfp_doc.doc_hash = doc_hash
+        ext = Path(file_path).suffix.lower()
+        chunks = []
+        tables = []
+        if ext == ".pdf":
+            parser = PDFParser()
+            chunks = parser.parse(file_path)
+            tables = parser.extract_tables(file_path)
+        elif ext == ".hwp":
+            parser = HWPParser()
+            chunks = parser.parse(file_path)
+        elif ext == ".docx":
+            parser = DOCXParser()
+            chunks = parser.parse(file_path)
+            tables = parser.extract_tables(file_path)
+        elif ext == ".hwpx":
+            parser = HWPXParser()
+            chunks = parser.parse(file_path)
+            tables = parser.extract_tables(file_path)
+        else:
+            raise ValueError(f"Unsupported file format for batch processing: {ext}")
+
+        if not chunks:
+            raise ValueError("문서 파싱 실패: 추출된 청크가 없습니다.")
+
+        rfp_doc = RFPDocument(
+            id=doc_hash,
+            filename=Path(file_path).name,
+            file_path=file_path,
+            doc_hash=doc_hash,
+            chunks=chunks,
+            tables=tables,
+            status="READY",
+        )
         vsm.ingest_document(rfp_doc)
         print(f"[BatchPipeline] Indexed {Path(file_path).name} -> {vsm.collection_name}")
 

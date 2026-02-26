@@ -1,6 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from bidflow.db import crud
+from bidflow.security.jwt_tokens import decode_access_token
 import logging
 
 logger = logging.getLogger("uvicorn.error")
@@ -11,20 +12,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     # 토큰 정제: 앞뒤 공백 및 따옴표 제거 (클라이언트에서 잘못 보낼 경우 대비)
     token = token.strip().strip('"')
 
-    if not token.startswith("user:"):
-        logger.warning(f"Auth Failed: Invalid token format. Received: {token}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token format",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
     try:
-        username = token.split(":", 1)[1]
-    except IndexError:
+        payload = decode_access_token(token)
+        username = payload["sub"]
+    except ValueError as exc:
+        logger.warning(f"Auth Failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token structure",
+            detail="Invalid access token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -18,7 +18,12 @@ class StorageRegistry:
             config = get_config("dev")
 
         storage = config.storage if config and getattr(config, "storage", None) else None
-        self.base = (storage.base if storage and getattr(storage, "base", None) else None) or "data"
+        base_raw = (storage.base if storage and getattr(storage, "base", None) else None) or "data"
+        # 상대 경로인 경우 프로젝트 루트 기준 절대 경로로 변환
+        if not os.path.isabs(base_raw):
+            from bidflow.core.config import get_project_root
+            base_raw = os.path.join(str(get_project_root()), base_raw)
+        self.base = base_raw
         self.accounts_dir = (storage.accounts_dir if storage and getattr(storage, "accounts_dir", None) else None) or "accounts"
 
         if storage and getattr(storage, "user_spaces", None):
@@ -177,8 +182,16 @@ class DocumentStore:
 
     def load_document(self, doc_hash: str, tenant_id: Optional[str] = None) -> Optional[RFPDocument]:
         uid = self._resolve_user(tenant_id)
-        _, processed_path = self._paths_for_user(uid)
 
+        # 1. DB 우선 조회 (팀원 문서 공유 지원)
+        crud = self._crud()
+        if crud:
+            row = crud.get_document(doc_hash, uid)
+            if row and "content" in row:
+                return RFPDocument(**row["content"])
+
+        # 2. DB에 없으면 파일 시스템 fallback
+        _, processed_path = self._paths_for_user(uid)
         file_name = f"{doc_hash}.json"
         load_path = os.path.join(processed_path, file_name)
         if not os.path.exists(load_path) and uid == "global":
@@ -189,22 +202,25 @@ class DocumentStore:
                 data = json.load(f)
             return RFPDocument(**data)
 
-        crud = self._crud()
-        if crud:
-            row = crud.get_document(doc_hash, uid)
-            if row and "content" in row:
-                return RFPDocument(**row["content"])
         return None
 
     def list_documents(self, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         uid = self._resolve_user(tenant_id)
-        _, processed_path = self._paths_for_user(uid)
 
-        results: List[Dict[str, Any]] = []
+        # 1. DB 우선 조회 (팀 단위 공유 + owner_name 등 메타데이터 포함)
+        crud = self._crud()
+        if crud:
+            db_results = crud.list_documents(uid)
+            if db_results:
+                return db_results
+
+        # 2. DB에 없으면 파일 시스템 fallback
+        _, processed_path = self._paths_for_user(uid)
         target_path = processed_path
         if uid == "global" and not os.listdir(processed_path):
             target_path = self.legacy_processed_path
 
+        results: List[Dict[str, Any]] = []
         if os.path.exists(target_path):
             for file_name in os.listdir(target_path):
                 if not file_name.endswith(".json") or file_name.endswith("_result.json"):
@@ -217,16 +233,13 @@ class DocumentStore:
                             "doc_hash": doc.doc_hash,
                             "filename": doc.filename,
                             "upload_date": doc.upload_date.isoformat() if doc.upload_date else None,
+                            "status": getattr(doc, "status", "READY"),
+                            "user_id": uid,
+                            "owner_name": uid,
                         }
                     )
 
-        if results:
-            return sorted(results, key=lambda d: d.get("upload_date") or "", reverse=True)
-
-        crud = self._crud()
-        if crud:
-            return crud.list_documents(uid)
-        return []
+        return sorted(results, key=lambda d: d.get("upload_date") or "", reverse=True)
 
     def save_extraction_result(self, doc_hash: str, result: Dict[str, Any], tenant_id: Optional[str] = None) -> str:
         uid = self._resolve_user(tenant_id)
@@ -246,8 +259,16 @@ class DocumentStore:
 
     def load_extraction_result(self, doc_hash: str, tenant_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         uid = self._resolve_user(tenant_id)
-        _, processed_path = self._paths_for_user(uid)
 
+        # 1. DB 우선 조회 (팀원 결과 공유 지원)
+        crud = self._crud()
+        if crud:
+            result = crud.get_extraction(doc_hash, uid)
+            if result:
+                return result
+
+        # 2. DB에 없으면 파일 시스템 fallback
+        _, processed_path = self._paths_for_user(uid)
         file_name = f"{doc_hash}_result.json"
         load_path = os.path.join(processed_path, file_name)
         if not os.path.exists(load_path) and uid == "global":
@@ -257,9 +278,6 @@ class DocumentStore:
             with open(load_path, "r", encoding="utf-8") as f:
                 return json.load(f)
 
-        crud = self._crud()
-        if crud:
-            return crud.get_extraction(doc_hash, uid)
         return None
 
     def save_profile(self, profile: Any, tenant_id: Optional[str] = None) -> str:

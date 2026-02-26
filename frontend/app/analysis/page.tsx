@@ -1,15 +1,25 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { getDocuments, runExtraction, RFPDocument } from '@/lib/api';
+import { getDocuments, runExtraction, getExtractionResult, RFPDocument } from '@/lib/api';
 import UserHeader from '@/components/UserHeader';
 import Modal from '@/components/Modal';
 import CommentSection from '@/components/CommentSection';
 import analysisIcon from '../images/analysis.png';
 
+const ANALYSIS_RUNNING_KEY = "analysis_running_doc_hash";
+
 export default function AnalysisPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <AnalysisContent />
+    </Suspense>
+  );
+}
+
+function AnalysisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [documents, setDocuments] = useState<RFPDocument[]>([]);
@@ -19,6 +29,8 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("g1");
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const selectedDoc = documents.find((d) => (d.id || d.doc_hash) === selectedDocId);
+  const selectedDocHash = selectedDoc?.doc_hash || selectedDocId;
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -35,13 +47,7 @@ export default function AnalysisPage() {
         return;
       }
       try {
-        const response = await fetch("http://localhost:8000/api/v1/ingest/documents", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch documents");
-        }
-        const docs: RFPDocument[] = await response.json();
+        const docs: RFPDocument[] = await getDocuments();
         setDocuments(docs);
 
         const paramDocId = searchParams.get('docId');
@@ -58,10 +64,26 @@ export default function AnalysisPage() {
     fetchDocs();
   }, [searchParams]);
 
-  // 문서 선택 변경 시 로컬 스토리지에서 결과 불러오기
+  // 문서 선택 변경 시 서버 → localStorage 순서로 결과 불러오기
   useEffect(() => {
-    if (selectedDocId) {
-      const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`);
+    if (!selectedDocHash) return;
+
+    const loadResult = async () => {
+      // 1. 서버에서 저장된 결과 조회
+      const serverResult = await getExtractionResult(selectedDocHash);
+      if (serverResult?.data) {
+        setResult(serverResult.data);
+        localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(serverResult.data));
+        localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(serverResult.data));
+        if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
+          localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+        }
+        setAnalyzing(false);
+        return;
+      }
+
+      // 2. 서버에 없으면 localStorage fallback
+      const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`) || localStorage.getItem(`analysis_result_${selectedDocHash}`);
       if (savedResult) {
         try {
           setResult(JSON.parse(savedResult));
@@ -71,32 +93,67 @@ export default function AnalysisPage() {
       } else {
         setResult(null);
       }
-    }
-  }, [selectedDocId]);
+
+      setAnalyzing(localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash);
+    };
+    loadResult();
+  }, [selectedDocId, selectedDocHash]);
+
+  useEffect(() => {
+    if (!selectedDocHash) return;
+    if (localStorage.getItem(ANALYSIS_RUNNING_KEY) !== selectedDocHash) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      const serverResult = await getExtractionResult(selectedDocHash);
+      if (!cancelled && serverResult?.data) {
+        setResult(serverResult.data);
+        localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(serverResult.data));
+        localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(serverResult.data));
+        localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+        setAnalyzing(false);
+        return true;
+      }
+      return false;
+    };
+
+    setAnalyzing(true);
+    const intervalId = setInterval(async () => {
+      const done = await poll();
+      if (done) clearInterval(intervalId);
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [selectedDocHash, selectedDocId]);
 
   const handleAnalyze = async () => {
-    if (!selectedDocId) return;
-    
+    if (!selectedDocHash) return;
+
     setAnalyzing(true);
     setError(null);
-    setResult(null);
+    localStorage.setItem(ANALYSIS_RUNNING_KEY, selectedDocHash);
+    // 기존 결과를 유지하면서 로딩 표시 (null로 초기화하지 않음)
 
     try {
-      // 선택된 문서의 ID로 doc_hash 찾기
-      const selectedDoc = documents.find(d => (d.id || d.doc_hash) === selectedDocId);
-      const docHash = selectedDoc?.doc_hash || selectedDocId;
-
-      const res = await runExtraction(docHash);
+      const res = await runExtraction(selectedDocHash);
       if (res && res.data) {
         setResult(res.data);
         localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(res.data));
+        localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(res.data));
       } else {
         setError("분석 결과를 가져오지 못했습니다. 서버 로그를 확인해주세요.");
       }
     } catch (e) {
       setError("분석 중 오류가 발생했습니다.");
+    } finally {
+      if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
+        localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+      }
+      setAnalyzing(false);
     }
-    setAnalyzing(false);
   };
 
   const renderSlot = (label: string, slotData: any) => {
@@ -267,14 +324,39 @@ export default function AnalysisPage() {
           </div>
         )}
 
-        {/* 결과 뷰어 */}
-        {analyzing ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-100 border-t-indigo-600 mb-6"></div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">AI 분석 중입니다</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">문서의 크기에 따라 시간이 소요될 수 있습니다. 잠시만 기다려주세요.</p>
+        {/* JSON 다운로드 + 결과 뷰어 */}
+        {result && (
+          <div className="mb-4 flex justify-end">
+            <button
+              onClick={() => {
+                const docHash = selectedDocHash || selectedDocId;
+                const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `extraction_${docHash.slice(0, 12)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              JSON 다운로드
+            </button>
           </div>
-        ) : result ? (
+        )}
+
+        {analyzing && (
+          <div className="mb-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center gap-3 text-indigo-700 dark:text-indigo-300">
+            <svg className="animate-spin h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span className="font-medium">분석 진행 중입니다. 다른 페이지로 이동했다가 돌아와도 결과를 유지합니다.</span>
+          </div>
+        )}
+
+        {result ? (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
             {/* 탭 헤더 */}
             <div className="flex border-b border-gray-200 dark:border-gray-700">
@@ -313,12 +395,15 @@ export default function AnalysisPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {renderSlot("제출 마감일", result.g2?.submission_deadline)}
                   {renderSlot("설명회 일자", result.g2?.briefing_date)}
+                  {renderSlot("질의 응답 기간", result.g2?.qna_period)}
                 </div>
               )}
               {activeTab === 'g3' && (
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {renderSlot("필수 면허/자격", result.g3?.required_licenses)}
-                  {renderSlot("제한 사항", result.g3?.restrictions)}
+                  {renderSlot("지역 제한", result.g3?.region_restriction)}
+                  {renderSlot("신용평가등급", result.g3?.financial_credit)}
+                  {renderSlot("기타 제한 사항", result.g3?.restrictions)}
                 </div>
               )}
               {activeTab === 'g4' && (
@@ -331,6 +416,12 @@ export default function AnalysisPage() {
                 </div>
               )}
             </div>
+          </div>
+        ) : analyzing ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-100 border-t-indigo-600 mb-6"></div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">AI 분석 중입니다</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">문서의 크기에 따라 시간이 소요될 수 있습니다. 잠시만 기다려주세요.</p>
           </div>
         ) : (
           !error && (

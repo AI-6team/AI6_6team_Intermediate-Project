@@ -63,6 +63,26 @@ def update_user_profile(username: str, team: str, licenses: str) -> None:
         conn.close()
 
 
+def update_team_licenses(team: str, licenses: str) -> None:
+    """특정 팀 전체 사용자의 licenses 값을 동기화합니다."""
+    if not team:
+        return
+
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET licenses = ?
+                WHERE team = ?
+                """,
+                (licenses, team),
+            )
+    finally:
+        conn.close()
+
+
 def get_user(username: str) -> Optional[Dict[str, Any]]:
     """사용자 정보를 반환합니다. 없으면 None."""
     conn = get_connection()
@@ -71,6 +91,19 @@ def get_user(username: str) -> Optional[Dict[str, Any]]:
             "SELECT * FROM users WHERE username = ?", (username,)
         ).fetchone()
         return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def update_user_password_hash(username: str, password_hash: str) -> None:
+    """사용자의 password_hash를 갱신합니다."""
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE username = ?",
+                (password_hash, username),
+            )
     finally:
         conn.close()
 

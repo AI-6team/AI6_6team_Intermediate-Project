@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { apiUrl } from '@/lib/api';
 
 export default function UserHeader() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function UserHeader() {
       return;
     }
 
-    fetch("http://localhost:8000/auth/me", {
+    fetch(apiUrl("/auth/me"), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {

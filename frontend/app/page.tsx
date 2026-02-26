@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/lib/api";
 
 export default function HomePage() {
   const router = useRouter();
@@ -41,7 +42,7 @@ export default function HomePage() {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/auth/login", {
+      const response = await fetch(apiUrl("/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: loginId, password: loginPw }),
@@ -92,7 +93,7 @@ export default function HomePage() {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/auth/register", {
+      const response = await fetch(apiUrl("/auth/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -289,11 +290,15 @@ export default function HomePage() {
               📄
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              PDF 자동 파싱
+              문서 자동 파싱
             </h3>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
               복잡한 표와 서식이 포함된 RFP 문서도 구조를 유지하며 정확하게 텍스트 데이터를 추출합니다.
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-full">HWP</span>
+              <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-full">PDF</span>
+            </div>
           </div>
 
           {/* Feature 2 */}

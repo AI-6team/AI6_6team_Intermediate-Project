@@ -123,3 +123,7 @@ data/experiments/*stability*
 data/experiments/*llmjudge*
 data/experiments/d*_eval_log.txt
 data/experiments/golden_testset_*
+
+# Final deliverable raw assets (local-only)
+docs/final_presentation/
+docs/final_report_assets/

@@ -1,148 +1,275 @@
 # BidFlow
 
-한국어 입찰제안요청서(RFP) 분석을 위한 보안 강화형 RAG 시스템
+한국어 입찰 제안요청서(RFP) 분석을 위한 보안 강화형 RAG 시스템
 
-## 프로젝트 개요
+> 마지막 업데이트: 2026-02-26  
+> 기준 코드: `src/bidflow` + `frontend`
 
-BidFlow는 공공기관 입찰 RFP 문서(HWP/PDF/DOCX/HWPX)를 업로드하면 핵심 정보를 자동 추출하고, 회사 프로필과 비교해 입찰 적격성(Go/No-Go)을 판단합니다.
+## 1) 프로젝트 요약
 
-## 주요 기능
+BidFlow는 RFP 문서를 업로드하면:
 
-- **다중 포맷 파싱**: HWP(hwp5txt+hwp5html), PDF(PyMuPDF+pdfplumber), DOCX, HWPX
-- **업로드 UI 통합**: 문서 1개 업로드 시 단일 분석, 2개 이상 업로드 시 다문서 일괄 분석 자동 전환
-- **멀티스텝 추출(G1~G4)**: 기본정보, 일정/제출, 자격/결격, 배점표 단계 추출
-- **하이브리드 검색**: BM25 + Vector(Chroma) + Rerank(Weighted RRF)
-- **RAG 보강 전략**: 정규식 힌트 주입, Front-loading, Structure-aware 검색
-- **규칙 기반 검증**: 면허/신용/지역/마감 등 규칙 기반 판단
-- **인증/권한**: 회원가입/로그인, 역할(member/leader), 팀 단위 권한 분리
-- **팀 워크스페이스**: 팀 문서 합산 조회, 코멘트/답글, 문서별 판정 공유
-- **멀티테넌시**: 사용자별 스토리지/벡터DB/DB 레코드 분리
-- **보안**: Input/Output Rail, HWP Deep Scan, PII 필터, Tool Gate(SSRF 방어)
+1. 문서를 파싱/청킹/인덱싱하고
+2. G1~G4 슬롯(기본정보/일정/자격/배점)을 추출한 뒤
+3. 회사 프로필과 규칙 기반으로 적격성을 판정하고
+4. 팀 단위로 의견(댓글/답글)과 판정 결과를 공유하는 시스템입니다.
 
-## 아키텍처
+핵심은 `LLM 추출`과 `규칙 기반 판정`을 분리해, 성능뿐 아니라 재현성과 통제 가능성을 확보한 점입니다.
+
+### 기술 스택
+
+| 영역 | 기술 |
+|---|---|
+| Backend | Python 3.x, FastAPI, SQLite(WAL) / PostgreSQL, LangChain |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4, Axios |
+| Vector DB | ChromaDB (text-embedding-3-small) |
+| LLM | gpt-5-mini (추출), BAAI/bge-reranker-v2-m3 (리랭킹) |
+| 평가 | RAGAS 0.4.3 (Faithfulness, Context Recall) |
+| 관측 | Langfuse (추출/검색 체인 추적) |
+
+## 2) 문제 정의
+
+입찰 실무에서는 마감일, 자격요건, 보안/계약 조건 한 줄을 놓치면 탈락으로 이어질 수 있습니다.  
+따라서 본 프로젝트는 단순 요약이 아니라 아래를 목표로 설계되었습니다.
+
+- 누락 위험 감소: 긴 문서에서 핵심 슬롯을 구조화
+- 검증 가능한 판단: 근거(Evidence) 기반 추출 + 룰 엔진 판정
+- 사내 적용 전제: 인증/권한/데이터 분리/보안 레일 적용
+
+## 3) 시스템 아키텍처
 
 ```text
-User (Streamlit UI)
-  │
-  ├─ Auth/Login/Register (SQLite users, bcrypt, cookie)
-  │
-  ├─ Upload(단일/다문서 자동 전환)
-  │    ├─ RFPLoader -> Parser(HWP/PDF/DOCX/HWPX)
-  │    ├─ DocumentStore(SQLite + file storage)
-  │    └─ VectorStoreManager(Chroma, user/tenant isolated)
-  │
-  ├─ ExtractionPipeline (G1 -> G2/G3 -> G4)
-  │
-  ├─ Retrieval/RAG
-  │    ├─ HybridRetriever(BM25 + Vector + RRF + Rerank)
-  │    └─ RAGChain(Structure-aware + Postprocess)
-  │
-  ├─ Validation (RuleBasedValidator)
-  │
-  └─ Team Workspace
-       ├─ team docs aggregation
-       └─ comments/replies (SQLite)
+Next.js Frontend
+  ├─ /dashboard       문서 업로드(1개=단건, 2개 이상=배치 UI)
+  ├─ /analysis        G1~G4 추출 실행/조회
+  ├─ /validation      회사 프로필 기반 규칙 검증
+  └─ /team            팀 문서/판정/코멘트 협업
+          │
+          ▼
+FastAPI Backend (bidflow.main:app)
+  ├─ /auth/*          로그인/회원가입/프로필(팀장 권한)
+  ├─ /api/v1/ingest/* 업로드/문서 조회
+  ├─ /api/v1/extract/* 추출 실행/조회
+  ├─ /api/v1/validate 검증 실행
+  └─ /api/v1/team/*   팀 문서/판정/코멘트
+          │
+          ▼
+Data Layer
+  ├─ Relational DB (SQLite 기본, PostgreSQL 전환 지원)
+  ├─ File Storage (data/accounts/{user_id}/...)
+  └─ Chroma Vector DB (tenant/user ACL metadata)
 ```
 
-## 실험 결과 종합 (최신화)
+## 4) 기능별 구현 상세
 
-기준 문서: `docs/planning/HISTORY_v2_execution.md` (최종 업데이트: 2026-02-25)
+### 4.1 문서 업로드/파싱/인덱싱
 
-### 지표 정의
+- FastAPI 업로드 엔드포인트: `POST /api/v1/ingest/upload`
+- 구현 경로:
+  - `src/bidflow/api/routers/ingest.py`
+  - `src/bidflow/ingest/service.py`
+  - `src/bidflow/ingest/storage.py`
+- 동작:
+  1. 파일 임시 저장
+  2. 확장자 분기 파싱 (`.pdf`, `.hwp`)
+  3. `DocumentStore`로 JSON/메타 저장
+  4. `VectorStoreManager`로 Chroma 인덱싱
 
-- `kw_v3/v4/v5`: 정답 키워드 매칭 기반 핵심 지표(0~1). 버전이 올라갈수록 정규화/표현 유연 매칭이 강화됩니다.
-- `kw_v5b`: `kw_v5`에서 공백/괄호/슬래시 변형 매칭을 추가 보정한 지표입니다.
-- `Perfect`: 문항 단위 완전 정답(`kw=1.0`) 개수입니다.
-- `Gate`: split별 통과 기준(Dev `>=0.99`, Holdout `>=0.95`, Sealed `>=0.95`)입니다.
-- `Oracle`/`Non-oracle`: Oracle은 GT 의존 선택(연구용 상한), Non-oracle은 GT 비의존 선택(실운영 시나리오)입니다.
-- `Faithfulness`(RAGAS): 생성 답변이 검색 근거에 충실한지(환각 억제) 지표입니다.
-- `Context Recall`(RAGAS): 필요한 근거가 검색 컨텍스트에 포함되었는지 지표입니다.
-- `Stdev`: 동일 설정 반복 실행 시 점수 변동성(재현성) 지표입니다.
+참고:
+- 코드베이스에는 DOCX/HWPX 파서(`src/bidflow/parsing/docx_parser.py`, `hwpx_parser.py`)와 `RFPLoader` 기반 확장 경로도 포함되어 있습니다.
+- 현재 Next.js 기본 업로드 UI와 `/api/v1/ingest/upload` 경로는 `.pdf`, `.hwp`를 기준으로 동작합니다.
 
-### EXP01~EXP13 요약
+### 4.2 파싱 전략
 
-| 구간 | 핵심 내용 | 결과 요약 |
-|------|-----------|-----------|
-| EXP01~03 | 청킹/검색/프롬프트 기초 | baseline 확립 |
-| EXP04~06 | 테이블/정규화/파이프라인 개선 | 성능 안정화 |
-| EXP07~10 | table-aware + 파서 고도화 | 성능 상승 |
-| EXP11~13 | 프롬프트/컨텍스트 실험 | 효과/한계 확인 |
+- PDF: `pdfplumber` 기반 텍스트/테이블 추출 (`src/bidflow/parsing/pdf_parser.py`)
+- HWP:
+  - 1차 `hwp5txt`
+  - 실패 시 `olefile` fallback (`src/bidflow/parsing/hwp_parser.py`)
+  - 필요 시 deep scan으로 숨은 스트림 검사
+- HWP HTML/테이블 강화:
+  - `hwp5html` + BeautifulSoup 기반 테이블 구조화
+  - `col_path` 직렬화, rowspan/colspan 해소
+  - `TableAwareChunker`로 텍스트/테이블 분리 청킹
 
-### EXP14~EXP20 요약 (무엇을 했는지 + 결과)
+### 4.3 저장소/멀티테넌시
 
-| 실험 | 무엇을 검증했는가 | 핵심 결과 |
-|------|------------------|-----------|
-| EXP14 | 오답 진단(실패 유형 분해) | imperfect 11건 분석, `gen_failure 6 / partial_retrieval 5` |
-| EXP15 | Generation 품질 개선 | `kw_v3=0.9258` |
-| EXP16 | 메트릭 v4 + SC 5-shot 검증 | `kw_v4=0.9534` |
-| EXP17 | 메트릭 v5 + 0.99 목표 도전 | `kw_v5=0.9547` (0.99 미달) |
-| EXP18 | GT 정제 + targeted prompt | `kw_v5=0.9851`, `28/30 perfect` |
-| EXP19 | 0.99 달성 + 과적합 검증 | Dev `kw_v5=0.9952`, Holdout raw `0.8821`(과적합 신호) |
-| EXP20(D9) | metric `v5b` 도입 | Overall `0.9799`, holdout/sealed gate 통과 |
-| EXP20v2(D10) | 평가 후처리로 gate 보완 | Overall `0.9874`, dev/holdout/sealed 3-gate 통과 |
-| EXP20v2(D10-R) | 동일 설정 3-run 재현성 점검 | overall gate pass-rate `33.3%` (불안정 확인) |
+- 핵심 모듈: `src/bidflow/ingest/storage.py`
+- 구성:
+  - `StorageRegistry`: 사용자/공유/팀 경로 계산
+  - `DocumentStore`: 문서/추출결과/프로필/세션 저장
+  - `VectorStoreManager`: 사용자별 Chroma 컬렉션 관리
+- 데이터 경계:
+  - 파일: `data/accounts/{user_id}/raw|processed|vectordb`
+  - 팀 공유: `data/shared/teams/{team_name}/...`
+  - 벡터 메타: `tenant_id`, `user_id`, `group_id`, `access_level`
 
-### EXP21 상세: 일반화 성능 + 재현성 안정화
+### 4.4 검색/RAG
 
-EXP21은 D10-R 불안정을 줄이기 위해 안정화 백로그(P1~P5)를 분리 실험했습니다.
+- 핵심 모듈:
+  - `src/bidflow/retrieval/hybrid_search.py`
+  - `src/bidflow/retrieval/rag_chain.py`
+  - `src/bidflow/retrieval/structure_aware.py`
+  - `src/bidflow/retrieval/rerank.py`
+- 구현 방식:
+  - BM25 + Vector 검색
+  - Weighted RRF로 병합
+  - 선택적 Cross-Encoder rerank
+  - 문서 범위 필터(doc_hash) + ACL 필터(tenant/user/group)
+  - Structure-aware (TOC 감지 + chapter prefix)
+  - 힌트 주입(정규식), front-loading, answer postprocess 전략 지원
 
-- `P1`(`answer_postprocess=stability_v1`)이 최종 채택안
-- D10 대비 Holdout +3.84pp, Overall +0.95pp 개선
-- `P1` 단일 실행: Overall `0.9968`, Dev `1.0000`, Holdout `0.9933`, Sealed `0.9909`, Perfect `48/50`
-- `P1-R` 3-run 재현성: Dev/Holdout/Sealed/Overall gate 모두 `3/3 (100%)`
-- 결론: 성능뿐 아니라 반복 실행 안정성까지 충족
+### 4.5 G1~G4 멀티스텝 추출
 
-### EXP22 상세: 평가 신뢰성 강화 (Non-oracle + 다차원 지표)
+- 파이프라인: `src/bidflow/extraction/pipeline.py`
+- 체인:
+  - G1 기본정보 (`project_name`, `issuer`, `period`, `budget`)
+  - G2 일정 (`submission_deadline`, `briefing_date`, `qna_period`)
+  - G3 자격 (`required_licenses`, `region_restriction`, `financial_credit`, `restrictions`)
+  - G4 배점표(`items`)
+- 특징:
+  - `with_structured_output` 기반 슬롯 강제 구조화
+  - 실패 시 `_empty_slot` fallback 제공
+  - 추출 결과를 `doc_hash_result.json` + SQLite에 동시 저장
 
-EXP22는 "점수가 좋아 보이는가"가 아니라 "실운영 기준으로 믿을 수 있는가"를 검증한 단계입니다.
+### 4.6 규칙 기반 검증/판정
 
-- Oracle 누수 제거: `selection_mode=first_deterministic` (GT 비의존 선택)
-- 다차원 평가 추가: `kw_v5` + RAGAS(`Faithfulness`, `Context Recall`)
-- 3-run 반복으로 변동성 계측
+- 검증 모듈: `src/bidflow/validation/validator.py`
+- 규칙:
+  - 면허/신용등급/지역 제한
+  - 예산 규모/마감 긴급도/정보 완전성
+  - 규칙값은 `configs/decision_rules.yaml`에서 로드
+- 종합 판정:
+  - RED 존재 시 보류(리스크 우선)
+  - GRAY만 존재 시 검토 필요
+  - 전부 GREEN이면 참여 권장
 
-| 항목 | 결과 |
-|------|------|
-| Non-oracle `kw_v5` (3-run mean) | `0.9742` |
-| `kw_v5` stdev | `0.0104` |
-| Oracle `kw_v5` mean | `0.9974` |
-| Oracle gap mean | `2.33pp` |
-| Faithfulness (mean ± stdev) | `0.9402 ± 0.0045` |
-| Context Recall (mean ± stdev) | `0.9778 ± 0.0019` |
-| Gate 패턴 일관성 | 3-run 모두 `Dev FAIL / Holdout PASS / Sealed PASS` |
+### 4.7 인증/권한/팀 협업
 
-해석:
-- Non-oracle 기준에서도 높은 점수와 낮은 변동성을 확인했습니다.
-- RAGAS를 추가해 근거 충실도/검색 충실도까지 함께 측정했습니다.
-- Gate 패턴이 3-run에서 동일하게 재현되어, 실패/성공 조건이 우연이 아닌 구조적 현상임을 확인했습니다.
+- 인증/사용자: `src/bidflow/api/main.py`, `src/bidflow/api/deps.py`
+- DB: `src/bidflow/db/crud.py`, `src/bidflow/db/database.py`
+- 구현 포인트:
+  - 회원가입/로그인/JWT 기반 인증
+  - bcrypt 비밀번호 해싱(legacy SHA-256 로그인 시 자동 마이그레이션)
+  - 역할(`member`, `leader`) 분리
+  - 팀 프로필 1개 정책(팀장 업데이트, 팀원 fallback 동기화)
+  - 팀 문서 집계, 문서별 판정 요약, 댓글/답글/삭제 API
+  - in-memory API rate limiting (429 + Retry-After)
 
-## 프로젝트 구조
+### 4.8 프론트엔드 UX 구현
+
+- 위치: `frontend/app/*`, `frontend/components/*`, `frontend/lib/api.ts`
+- 주요 페이지:
+
+| 페이지 | 경로 | 핵심 기능 |
+|---|---|---|
+| 홈 | `/` | 로그인/회원가입 폼, 팀/역할 선택, 기능 소개 |
+| 대시보드 | `/dashboard` | 드래그앤드롭 업로드, 배치(2개+) 자동 전환, 진행률 바, 문서 목록/상태 테이블 |
+| 분석 | `/analysis` | G1~G4 탭 기반 추출 결과 뷰어, 비동기 폴링(3초), JSON 다운로드 |
+| 검증 | `/validation` | 회사 프로필 조회 + 자동 규칙 검증, 색상 코딩(GREEN/RED/GRAY), 근거 표시 |
+| 팀 | `/team` | 팀원별 문서 목록, 판정 배지(GO/NO-GO/REVIEW), 댓글/답글 스레딩 |
+| 프로필 | `/profile` | 회사 프로필 편집(팀장 전용), 면허/지역/로고 관리, 팀원은 읽기 전용 |
+
+- 공유 컴포넌트:
+  - `Sidebar`: 좌측 네비게이션, 다크모드 토글, 접힘/펼침 상태
+  - `UserHeader`: 상단 사용자 정보(이름/팀/역할), 로그아웃
+  - `CommentSection`: 문서별 팀 댓글/답글, 작성/삭제, 타임스탬프
+  - `Modal`: 인증 확인 등 범용 알림 모달
+
+- UX 특징:
+  - 다크모드 지원 (localStorage 영속)
+  - localStorage 기반 결과 캐싱 (페이지 이동 시 데이터 유지)
+  - 역할 기반 UI 분기 (Leader: 프로필 편집 가능, Member: 읽기 전용)
+  - 실시간 추출 폴링 + 로딩 상태 시각화
+
+- API 연동: `frontend/lib/api.ts`에서 `NEXT_PUBLIC_API_BASE_URL` 기준 통합, 전 요청 Bearer 토큰 자동 첨부
+
+### 4.9 보안 구현
+
+- 문서: `src/bidflow/security/README.md`
+- 적용 레이어:
+  - Input Rail: 인젝션 패턴 차단 (`security/rails/input_rail.py`)
+  - PII Filter: 입력/출력 마스킹 및 탐지 (`security/pii_filter.py`)
+  - Tool Gate: allowlist + SSRF 방어 (`security/tool_gate.py`)
+  - HWP Deep Scan: 숨은 스트림 스캔 (`parsing/hwp_parser.py`)
+  - 보안 로그: `logs/security.log`, `logs/audit.log` 회전 기록
+
+> 보안 설계 원칙 및 PII 패턴 상세는 [종합 보고서 > 6. 보안 설계 및 적용 상태](docs/최종_종합보고서.md#6-보안-설계-및-적용-상태) 참고
+
+## 5) API 엔드포인트 요약
+
+| 영역 | 메서드 | 경로 | 설명 |
+|---|---|---|---|
+| Auth | POST | `/auth/register` | 회원가입 |
+| Auth | POST | `/auth/login` | 로그인 토큰 발급 |
+| Auth | GET/PUT | `/auth/me` | 내 정보 조회/수정(수정은 leader) |
+| Ingest | POST | `/api/v1/ingest/upload` | 문서 업로드 + 파싱 + 인덱싱 |
+| Ingest | GET | `/api/v1/ingest/documents` | 문서 목록 |
+| Ingest | GET | `/api/v1/ingest/documents/{doc_id}/view` | 파싱된 문서 상세 조회 |
+| Extraction | POST | `/api/v1/extract/{doc_id}` | G1~G4 추출 실행 |
+| Extraction | GET | `/api/v1/extract/{doc_id}` | 추출 결과 조회 |
+| Validation | POST | `/api/v1/validate` | 규칙 검증 실행 |
+| Team | GET | `/api/v1/team/members` | 팀원 목록 |
+| Team | GET | `/api/v1/team/documents` | 팀 문서 목록 |
+| Team | GET | `/api/v1/team/decision/{doc_hash}` | 문서 판정 요약 |
+| Comments | GET | `/api/v1/comments/{doc_hash}` | 문서별 댓글 조회 (팀 스코프) |
+| Comments | POST | `/api/v1/comments` | 댓글 생성 |
+| Comments | DELETE | `/api/v1/comments/{comment_id}` | 댓글 삭제 (작성자만) |
+| Replies | POST | `/api/v1/comments/{comment_id}/replies` | 답글 생성 |
+| Replies | DELETE | `/api/v1/replies/{reply_id}` | 답글 삭제 (작성자만) |
+| Health | GET | `/health` | 서버 상태 확인 |
+
+## 6) 실험 결과 요약 (EXP01~22)
+
+기준 문서:
+
+- `docs/planning/HISTORY_v2_execution.md` (최종 업데이트: 2026-02-25)
+- `docs/planning/EXP21_phase_stability_execution.md`
+- `docs/planning/EXP22_llmjudge_execution.md`
+
+핵심 결과:
+
+- EXP21(P1)에서 성능+안정성 동시 확보: `overall 0.9968`, 3-run gate pass `100%`
+- EXP22에서 non-oracle 평가 체계 확정:
+  - `kw_v5` 3-run mean `0.9742` (stdev `0.0104`)
+  - Faithfulness `0.9402 ± 0.0045`
+  - Context Recall `0.9778 ± 0.0019`
+- 결론: 고점 성능뿐 아니라 실운영 기준(비-GT 의존) 신뢰성 검증 완료
+
+> 실험별 의사결정 로그(막힘→다음 실험 연결)와 상세 수치는 [종합 보고서 > 4. 실험 여정](docs/최종_종합보고서.md#4-실험-여정-막힘과-다음-실험의-연결) 참고
+
+## 7) 프로젝트 구조
 
 ```text
 bidflow/
-├── configs/                    # base/dev/prod/exp 설정
+├── configs/                    # base/dev/prod/exp/security 설정 (YAML)
 ├── data/                       # 로컬 데이터(대부분 gitignore)
 ├── docs/
-│   └── planning/               # 실험/운영 계획 및 실행 문서
-├── scripts/                    # 실험/검증 실행 스크립트
+│   ├── planning/               # 실험/운영 계획 및 실행 문서
+│   └── final_presentation/     # 최종 발표 패키지
+├── scripts/                    # 실험/검증 스크립트
 ├── src/bidflow/
-│   ├── api/                    # FastAPI API
-│   ├── apps/ui/                # Streamlit UI
-│   ├── db/                     # SQLite schema/CRUD
-│   ├── core/                   # config/util
-│   ├── domain/                 # pydantic 모델
-│   ├── extraction/             # G1~G4, batch pipeline
-│   ├── ingest/                 # loader/storage/vector 관리
-│   ├── parsing/                # 파일 파서
-│   ├── retrieval/              # RAG/hybrid/rerank/prompt
-│   ├── security/               # PII/tool_gate/rails
-│   └── validation/             # rule validator
-├── tests/
-│   └── security/               # 보안 테스트
-├── local_only/                 # 로컬 보관(HANDOFF/프롬프트 등, git 제외)
+│   ├── api/                    # FastAPI 엔드포인트 (main, deps, routers/)
+│   ├── core/                   # 설정 로더, 프로젝트 루트 탐지
+│   ├── db/                     # SQLite schema/CRUD (users, documents, comments)
+│   ├── domain/                 # Pydantic 도메인 모델 (ComplianceMatrix, Evidence 등)
+│   ├── eval/                   # 평가 데이터셋 빌더/리포트 생성
+│   ├── extraction/             # G1~G4 추출 파이프라인, 힌트 탐지, 후처리
+│   ├── indexing/               # BM25/임베딩 인덱싱
+│   ├── ingest/                 # 저장/벡터DB/업로드 처리
+│   ├── parsing/                # PDF/HWP/DOCX/HWPX 파서, 테이블 청킹
+│   ├── retrieval/              # Hybrid/RAG/Structure-Aware/Rerank
+│   ├── security/               # Input·Output·Process Rail, PII Filter, Tool Gate
+│   ├── validation/             # 규칙 기반 검증 (validator, engine, rules/)
+│   └── launcher.py             # FastAPI+Next.js 통합 실행
+├── frontend/
+│   ├── app/                    # Next.js 페이지 (dashboard, analysis, validation, team, profile)
+│   ├── components/             # 공유 컴포넌트 (Sidebar, UserHeader, CommentSection, Modal)
+│   └── lib/                    # API 클라이언트 (api.ts)
+├── tests/security/             # 보안 테스트
 └── pyproject.toml
 ```
 
-## 설치
+## 8) 설치
 
 ```bash
 python -m venv .venv
@@ -152,9 +279,10 @@ python -m venv .venv
 # source .venv/bin/activate
 
 pip install -e .
+cd frontend && npm install
 ```
 
-## 환경 변수 (.env)
+## 9) 환경 변수 (`.env`)
 
 ```bash
 OPENAI_API_KEY=your_openai_key
@@ -166,28 +294,78 @@ LANGFUSE_PUBLIC_KEY=your_langfuse_public
 # FastAPI API key 매핑 (key:user,key:user)
 BIDFLOW_API_KEYS=sk-local-dev:admin
 
-# Streamlit authenticator cookie key
-BIDFLOW_COOKIE_KEY=replace_with_secure_random
+# Next.js -> FastAPI 주소
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+
+# JWT 인증
+BIDFLOW_JWT_SECRET=replace-with-long-random-secret
+BIDFLOW_JWT_EXPIRE_MINUTES=480
+# 점진 전환 중 구형 토큰 허용이 필요할 때만 1
+BIDFLOW_ALLOW_LEGACY_TOKEN=0
+
+# DB (미설정 시 SQLite: data/bidflow.db)
+# PostgreSQL 예시:
+# BIDFLOW_DATABASE_URL=postgresql://user:password@localhost:5432/bidflow
+
+# API Rate Limiting
+BIDFLOW_RATE_LIMIT_ENABLED=1
+BIDFLOW_RATE_LIMIT_AUTH_REQUESTS=20
+BIDFLOW_RATE_LIMIT_AUTH_WINDOW_SECONDS=60
+BIDFLOW_RATE_LIMIT_REQUESTS=240
+BIDFLOW_RATE_LIMIT_WINDOW_SECONDS=60
+
+# 런처 포트(선택)
+BIDFLOW_API_PORT=8000
+BIDFLOW_WEB_PORT=3000
 ```
 
-## 실행
+## 10) 실행
 
 ```bash
-# 통합 실행 (권장): FastAPI + Streamlit
+# 통합 실행 (권장): FastAPI + Next.js
 bidflow-run
 
 # 개별 실행
 uvicorn bidflow.main:app --reload
-streamlit run src/bidflow/apps/ui/Home.py
+cd frontend && npm run dev
 ```
 
-## 테스트
+## 11) 테스트
 
 ```bash
 pytest tests/security -q
 ```
 
-## 데이터/보안 정책
+## 12) 참고 문서
+
+- 종합 보고서: `docs/최종_종합보고서.md`
+- 실험 전체 이력: `docs/planning/HISTORY_v2_execution.md`
+- 단일화 실행 기록: `docs/planning/next_fastapi_unification_execution_2026-02-26.md`
+- 보안 아키텍처: `src/bidflow/security/README.md`
+
+## 13) 데이터/보안 정책
 
 - `data/raw` 원본 데이터셋은 GitHub 업로드 금지
-- `HANDOFF`/프롬프트/개인 메모는 `local_only/`에 보관하고 Git 제외
+- `local_only/`는 개인 메모/핸드오프 보관용으로 Git 제외
+- 사용자 문서와 벡터 데이터는 기본적으로 사용자/팀 경계 내에서만 조회
+
+## 14) Roadmap
+
+| 우선순위 | 항목 | 설명 |
+|:---:|---|---|
+| 1 | 평가 파이프라인 개선 | judge context에 chapter prefix 포함, non-oracle 기준 gate 재정의(0.97) |
+| 2 | 인증 고도화 | Refresh Token + 세션 강제 무효화(로그아웃/탈퇴/비밀번호 변경 연동) |
+| 3 | 평가 자동화 | 정기 리그레션 + 품질 임계치 알람 |
+| 4 | 배포 안정화 | CI/CD 파이프라인, 로그 대시보드, 장애 대응 절차 |
+| 5 | 보안 확장 | Process/Output Rail 전면 적용, Redis 기반 분산 rate limiting |
+| 6 | DB 운영 튜닝 | PostgreSQL 인덱스/커넥션 풀/백업·복구 리허설 |
+
+> 상세 한계 분석 및 근거는 [종합 보고서 > 9. 한계와 다음 단계](docs/최종_종합보고서.md#9-한계와-다음-단계) 참고
+
+## 15) Contributors
+
+| 이름 | 역할 |
+|---|---|
+| 임창현 | RAG 파이프라인 설계/실험 운영, 최종 성능·안정화 의사결정 주도 |
+| 김보윤 | QueryAnalyzer/DecisionEngine, 인증/팀 워크스페이스/프로필 정책 |
+| 김슬기 | Front-loading/힌트 주입/구조 인지 검색, 보안 레이어 및 웹 연동 고도화 |

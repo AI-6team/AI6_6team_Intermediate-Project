@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { getDocuments, runExtraction, runValidation, RFPDocument } from '@/lib/api';
+import { getCurrentUser, getDocuments, getExtractionResult, runExtraction, runValidation, RFPDocument } from '@/lib/api';
 import UserHeader from '@/components/UserHeader';
 import Modal from '@/components/Modal';
 import validationIcon from '../images/validation.png';
+
+const VALIDATION_RUNNING_KEY = "validation_running_doc_hash";
 
 function ValidationResultItem({ res, index }: { res: any, index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -85,13 +87,41 @@ function ValidationResultItem({ res, index }: { res: any, index: number }) {
 
 export default function ValidationPage() {
   const router = useRouter();
-  const [companyName, setCompanyName] = useState("");
-  const [licenses, setLicenses] = useState("");
-  
-  const [documents, setDocuments] = useState<RFPDocument[]>([]);
-  const [selectedDocId, setSelectedDocId] = useState<string>("");
+
+  // localStorage에서 캐시된 값으로 즉시 초기화 (페이지 이동 후 복귀 시 빈 화면 방지)
+  const [companyName, setCompanyName] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("cached_team") || "";
+    return "";
+  });
+  const [licenses, setLicenses] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("cached_licenses") || "";
+    return "";
+  });
+  const [region, setRegion] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("cached_region") || "";
+    return "";
+  });
+
+  const [documents, setDocuments] = useState<RFPDocument[]>(() => {
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(localStorage.getItem("cached_docs") || "[]"); } catch { return []; }
+    }
+    return [];
+  });
+  const [selectedDocId, setSelectedDocId] = useState<string>(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("cached_validation_docId") || "";
+    return "";
+  });
   const [validating, setValidating] = useState(false);
-  const [validationResults, setValidationResults] = useState<any[] | null>(null);
+  const [validationResults, setValidationResults] = useState<any[] | null>(() => {
+    if (typeof window !== "undefined") {
+      const docId = localStorage.getItem("cached_validation_docId") || "";
+      if (docId) {
+        try { return JSON.parse(localStorage.getItem(`validation_result_${docId}`) || "null"); } catch { return null; }
+      }
+    }
+    return null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -104,14 +134,15 @@ export default function ValidationPage() {
       }
 
       try {
-        const response = await fetch("http://localhost:8000/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setCompanyName(data.team || "");
-          setLicenses(data.licenses || "");
-        }
+        const data = await getCurrentUser();
+        if (!data) return;
+        setCompanyName(data.team || "");
+        setLicenses(data.licenses || "");
+        setRegion(data.region || "");
+        // 캐시에 저장
+        localStorage.setItem("cached_team", data.team || "");
+        localStorage.setItem("cached_licenses", data.licenses || "");
+        localStorage.setItem("cached_region", data.region || "");
       } catch (error) {
         console.error("Error fetching user info:", error);
       }
@@ -124,16 +155,16 @@ export default function ValidationPage() {
       const token = localStorage.getItem("token");
       if (!token) return;
       try {
-        const response = await fetch("http://localhost:8000/api/v1/ingest/documents", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch documents");
-        }
-        const docs: RFPDocument[] = await response.json();
+        const docs: RFPDocument[] = await getDocuments();
         setDocuments(docs);
-        if (docs.length > 0) {
-          setSelectedDocId(docs[0].id || docs[0].doc_hash);
+        localStorage.setItem("cached_docs", JSON.stringify(docs));
+        // 캐시된 선택이 없거나 유효하지 않을 때만 첫 문서 선택
+        const cachedDocId = localStorage.getItem("cached_validation_docId") || "";
+        const isCachedValid = cachedDocId && docs.some(d => (d.id || d.doc_hash) === cachedDocId);
+        if (!isCachedValid && docs.length > 0) {
+          const newDocId = docs[0].id || docs[0].doc_hash;
+          setSelectedDocId(newDocId);
+          localStorage.setItem("cached_validation_docId", newDocId);
         }
       } catch (error) {
         console.error("Error fetching documents for validation page:", error);
@@ -143,20 +174,28 @@ export default function ValidationPage() {
     fetchDocs();
   }, []);
 
-  // 문서 선택 변경 시 로컬 스토리지에서 검증 결과 불러오기
+  // 문서 선택 변경 시 자동 검증 실행
   useEffect(() => {
-    if (selectedDocId) {
-      const savedValidation = localStorage.getItem(`validation_result_${selectedDocId}`);
-      if (savedValidation) {
-        try {
-          setValidationResults(JSON.parse(savedValidation));
-        } catch (e) {
-          setValidationResults(null);
+    if (!selectedDocId) return;
+
+    // 캐시된 결과가 있으면 먼저 표시
+    const savedValidation = localStorage.getItem(`validation_result_${selectedDocId}`);
+    if (savedValidation) {
+      try {
+        const cached = JSON.parse(savedValidation);
+        if (cached && Array.isArray(cached)) {
+          setValidationResults(cached);
+          return; // 캐시 결과 있으면 재검증 생략
         }
-      } else {
-        setValidationResults(null);
+      } catch (e) {
+        // 캐시 파싱 실패 시 재검증 진행
       }
     }
+
+    // 캐시 없으면 결과 초기화 후 자동 검증 실행
+    setValidationResults(null);
+    handleValidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDocId]);
 
   const stats = validationResults ? {
@@ -170,67 +209,74 @@ export default function ValidationPage() {
     if (!selectedDocId) return;
     setValidating(true);
     setError(null);
-    setValidationResults(null);
+    const selectedDoc = documents.find(d => (d.id || d.doc_hash) === selectedDocId);
+    const docHash = selectedDoc?.doc_hash || selectedDocId;
+    localStorage.setItem(VALIDATION_RUNNING_KEY, docHash);
+    // 기존 결과를 유지하면서 로딩 표시 (null로 초기화하지 않음)
 
-    let analysisData = null;
+    try {
+      let analysisData = null;
 
-    // 1. 로컬 스토리지에서 분석 결과 확인
-    const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`);
-    if (savedResult) {
-      try {
-        analysisData = JSON.parse(savedResult);
-      } catch (e) {
-        console.error("Error parsing saved result:", e);
-      }
-    }
-
-    // 2. 로컬 스토리지에 없으면 API 호출 (Fallback)
-    if (!analysisData) {
-      const extractionRes = await runExtraction(selectedDocId);
-      if (extractionRes && extractionRes.data) {
-        analysisData = extractionRes.data;
-        localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(analysisData));
-      }
-    }
-
-    if (analysisData) {
-      const g3 = analysisData.g3 || analysisData.matrix || {}; // g3 또는 matrix 키 확인
-      
-      // 선택된 문서의 ID로 doc_hash 찾기 (백엔드가 doc_hash를 요구할 경우)
-      const selectedDoc = documents.find(d => (d.id || d.doc_hash) === selectedDocId);
-      const docHash = selectedDoc?.doc_hash || selectedDocId;
-
-      // 2. 검증 요청 페이로드 구성
-      const matrix = {
-        doc_hash: docHash,
-        slots: { ...g3 }
-      };
-      
-      const profile = {
-        id: "company_001",
-        name: companyName,
-        data: {
-          licenses: licenses.split(",").map(s => s.trim()).filter(Boolean)
+      // 1. 로컬 스토리지에서 분석 결과 확인
+      const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`) || localStorage.getItem(`analysis_result_${docHash}`);
+      if (savedResult) {
+        try {
+          analysisData = JSON.parse(savedResult);
+        } catch (e) {
+          console.error("Error parsing saved result:", e);
         }
-      };
+      }
 
-      // 3. 검증 실행
-      try {
-        const results = await runValidation(matrix, profile);
-        if (results) {
-          setValidationResults(results);
-          localStorage.setItem(`validation_result_${selectedDocId}`, JSON.stringify(results));
+      // 2. 로컬 스토리지에 없으면 API 호출 (Fallback)
+      if (!analysisData) {
+        const existingResult = await getExtractionResult(docHash);
+        if (existingResult?.data) {
+          analysisData = existingResult.data;
+          localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(analysisData));
+          localStorage.setItem(`analysis_result_${docHash}`, JSON.stringify(analysisData));
         } else {
-          setError("검증 결과가 비어있습니다.");
+          const extractionRes = await runExtraction(docHash);
+          if (extractionRes && extractionRes.data) {
+            analysisData = extractionRes.data;
+            localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(analysisData));
+            localStorage.setItem(`analysis_result_${docHash}`, JSON.stringify(analysisData));
+          }
         }
-      } catch (e: any) {
-        console.error(e);
-        setError(e.message || "검증 요청 중 오류가 발생했습니다.");
       }
-    } else {
-      setError("분석 데이터를 찾을 수 없습니다. 먼저 '분석 결과' 페이지에서 분석을 실행해주세요.");
+
+      if (analysisData) {
+        const g3 = analysisData.g3 || analysisData.matrix || {}; // g3 또는 matrix 키 확인
+
+        // 2. 검증 요청 페이로드 구성
+        const matrix = {
+          doc_hash: docHash,
+          slots: { ...g3 }
+        };
+
+        // 3. 검증 실행
+        try {
+          const results = await runValidation(matrix);
+          if (results) {
+            setValidationResults(results);
+            localStorage.setItem(`validation_result_${selectedDocId}`, JSON.stringify(results));
+          } else {
+            setError("검증 결과가 비어있습니다.");
+          }
+        } catch (e: any) {
+          console.error(e);
+          setError(e.message || "검증 요청 중 오류가 발생했습니다.");
+        }
+      } else {
+        setError("분석 데이터를 찾을 수 없습니다. 먼저 '분석 결과' 페이지에서 분석을 실행해주세요.");
+      }
+    } catch (e: any) {
+      setError(e?.message || "검증 중 오류가 발생했습니다.");
+    } finally {
+      if (localStorage.getItem(VALIDATION_RUNNING_KEY) === docHash) {
+        localStorage.removeItem(VALIDATION_RUNNING_KEY);
+      }
+      setValidating(false);
     }
-    setValidating(false);
   };
 
   return (
@@ -265,7 +311,7 @@ export default function ValidationPage() {
             <span className="w-1 h-6 bg-indigo-500 rounded-full"></span>
             회사 프로필
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">회사명</label>
               <input
@@ -284,6 +330,15 @@ export default function ValidationPage() {
                 className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 shadow-sm sm:text-sm p-3 border cursor-not-allowed"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">지역</label>
+              <input
+                type="text"
+                value={region}
+                readOnly
+                className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 shadow-sm sm:text-sm p-3 border cursor-not-allowed"
+              />
+            </div>
           </div>
         </div>
 
@@ -295,7 +350,7 @@ export default function ValidationPage() {
               <div className="relative">
                 <select
                   value={selectedDocId}
-                  onChange={(e) => setSelectedDocId(e.target.value)}
+                  onChange={(e) => { setSelectedDocId(e.target.value); localStorage.setItem("cached_validation_docId", e.target.value); }}
                   className="appearance-none block w-full pl-4 pr-10 py-3 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg border shadow-sm"
                 >
                   {documents.map(doc => (
@@ -326,7 +381,7 @@ export default function ValidationPage() {
                   </svg>
                   검증 중...
                 </span>
-              ) : '적격 여부 검증'}
+              ) : '재검증'}
             </button>
           </div>
         </div>
@@ -340,8 +395,13 @@ export default function ValidationPage() {
         )}
 
         {/* 3. 검증 결과 */}
+        {validating && !validationResults && (
+          <div className="flex justify-center items-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-100 border-t-indigo-600"></div>
+          </div>
+        )}
         {validationResults ? (
-          <div className="space-y-6">
+          <div className={`space-y-6 ${validating ? 'opacity-60 pointer-events-none' : ''}`}>
             {/* 요약 카드 */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
@@ -381,7 +441,7 @@ export default function ValidationPage() {
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">검증 결과가 없습니다</h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                상단의 드롭다운에서 문서를 선택하고 <span className="font-semibold text-indigo-600 dark:text-indigo-400">적격 여부 검증</span> 버튼을 클릭하여 결과를 확인하세요.
+                문서를 선택하면 자동으로 자격 검증이 실행됩니다. 결과가 표시되지 않으면 <span className="font-semibold text-indigo-600 dark:text-indigo-400">재검증</span> 버튼을 클릭하세요.
               </p>
             </div>
           )

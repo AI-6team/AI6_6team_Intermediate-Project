@@ -13,14 +13,13 @@ def get_ingest_service():
 async def upload_rfp(
     file: UploadFile = File(...),
     service: IngestService = Depends(get_ingest_service),
-    user: dict = Depends(get_current_user)  # user는 dict 또는 str일 수 있음 (deps 구현에 따라)
+    user: dict = Depends(get_current_user),
 ):
     if not file.filename.lower().endswith(('.pdf', '.hwp')):
         raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다.")
 
     try:
-        # user 객체에서 ID 추출 (구현에 따라 user['username'] 또는 user가 str일 수 있음)
-        user_id = user.get("username") if isinstance(user, dict) else str(user)
+        user_id = user.get("username", "")
         
         doc = await service.process_upload(file, user_id)
         
@@ -41,13 +40,13 @@ async def upload_rfp(
 
 @router.get("/documents")
 def list_documents(user: dict = Depends(get_current_user)):
-    user_id = user.get("username") if isinstance(user, dict) else str(user)
+    user_id = user.get("username", "")
     store = DocumentStore(user_id=user_id)
     return store.list_documents()
 
 @router.get("/documents/{doc_id}/view")
 def view_document(doc_id: str, user: dict = Depends(get_current_user)):
-    user_id = user.get("username") if isinstance(user, dict) else str(user)
+    user_id = user.get("username", "")
     store = DocumentStore(user_id=user_id)
     doc = store.load_document(doc_id)
     if not doc:
