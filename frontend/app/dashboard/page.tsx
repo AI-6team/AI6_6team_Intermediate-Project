@@ -18,6 +18,8 @@ interface BatchResult {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : "알 수 없는 오류";
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [documents, setDocuments] = useState<RFPDocument[]>([]);
@@ -87,8 +89,8 @@ export default function DashboardPage() {
         setMessage({ type: 'success', text: `업로드 성공! (ID: ${result.doc_id})` });
         fetchDocuments();
         setFiles([]);
-      } catch (e: any) {
-        setMessage({ type: 'error', text: `업로드 실패: ${e.message}` });
+      } catch (e: unknown) {
+        setMessage({ type: 'error', text: `업로드 실패: ${getErrorMessage(e)}` });
       } finally {
         setUploading(false);
       }
@@ -102,8 +104,8 @@ export default function DashboardPage() {
         try {
           const result = await uploadDocument(files[i]);
           results.push({ name: files[i].name, status: "success", docId: result.doc_id });
-        } catch (e: any) {
-          results.push({ name: files[i].name, status: "error", error: e.message });
+        } catch (e: unknown) {
+          results.push({ name: files[i].name, status: "error", error: getErrorMessage(e) });
         }
       }
 

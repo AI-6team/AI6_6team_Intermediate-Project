@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, type ReactNode } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getDocuments, runExtraction, getExtractionResult, RFPDocument } from '@/lib/api';
@@ -10,6 +10,37 @@ import CommentSection from '@/components/CommentSection';
 import analysisIcon from '../images/analysis.png';
 
 const ANALYSIS_RUNNING_KEY = "analysis_running_doc_hash";
+type RecordValue = Record<string, unknown>;
+
+interface ExtractionEvidence {
+  page_no?: number;
+  text_snippet?: string;
+  [key: string]: unknown;
+}
+
+interface SlotObject {
+  value?: unknown;
+  evidence?: ExtractionEvidence[];
+  [key: string]: unknown;
+}
+
+type SlotValue = SlotObject | string | number | boolean | null | undefined;
+
+interface ExtractionViewData {
+  g1?: Record<string, SlotValue>;
+  g2?: Record<string, SlotValue>;
+  g3?: Record<string, SlotValue>;
+  g4?: unknown;
+  [key: string]: unknown;
+}
+
+function isRecord(value: unknown): value is RecordValue {
+  return typeof value === "object" && value !== null;
+}
+
+function isSlotObject(value: unknown): value is SlotObject {
+  return isRecord(value) && ("value" in value || "evidence" in value);
+}
 
 export default function AnalysisPage() {
   return (
@@ -25,7 +56,7 @@ function AnalysisContent() {
   const [documents, setDocuments] = useState<RFPDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string>("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ExtractionViewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("g1");
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -87,7 +118,7 @@ function AnalysisContent() {
       if (savedResult) {
         try {
           setResult(JSON.parse(savedResult));
-        } catch (e) {
+        } catch {
           setResult(null);
         }
       } else {
@@ -146,7 +177,7 @@ function AnalysisContent() {
       } else {
         setError("분석 결과를 가져오지 못했습니다. 서버 로그를 확인해주세요.");
       }
-    } catch (e) {
+    } catch {
       setError("분석 중 오류가 발생했습니다.");
     } finally {
       if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
@@ -156,23 +187,29 @@ function AnalysisContent() {
     }
   };
 
-  const renderSlot = (label: string, slotData: any) => {
+  const renderSlot = (label: string, slotData: SlotValue) => {
     if (!slotData) return null;
-    const value = (typeof slotData === 'object' && slotData !== null && 'value' in slotData) 
-      ? slotData.value 
-      : slotData;
+    const value = isSlotObject(slotData) ? slotData.value : slotData;
+    const evidence = isSlotObject(slotData) && Array.isArray(slotData.evidence) ? slotData.evidence : [];
+    const firstEvidence = evidence[0];
+    const displayValue =
+      value === null || value === undefined
+        ? "-"
+        : (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+          ? String(value)
+          : JSON.stringify(value);
 
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
         <div className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wide mb-2">{label}</div>
-        <div className="text-gray-900 dark:text-white text-base font-medium mb-4 leading-relaxed break-words">{value || "-"}</div>
-        {slotData.evidence && slotData.evidence.length > 0 && (
+        <div className="text-gray-900 dark:text-white text-base font-medium mb-4 leading-relaxed break-words">{displayValue}</div>
+        {firstEvidence && (
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-start gap-2 text-gray-600 dark:text-gray-300">
               <span className="shrink-0 inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
-                p.{slotData.evidence[0].page_no}
+                p.{firstEvidence.page_no ?? "-"}
               </span>
-              <span className="italic">"{slotData.evidence[0].text_snippet}"</span>
+              <span className="italic">&quot;{firstEvidence.text_snippet || "-"}&quot;</span>
             </div>
           </div>
         )}
@@ -180,21 +217,21 @@ function AnalysisContent() {
     );
   };
 
-  const renderCellContent = (content: any) => {
+  const renderCellContent = (content: unknown): ReactNode => {
     if (content === null || content === undefined) return "-";
     
     if (Array.isArray(content)) {
       if (content.length === 0) return <span className="text-gray-400 italic text-xs">Empty</span>;
       return (
         <ul className="list-disc list-inside text-xs space-y-1">
-          {content.map((item: any, i: number) => (
+          {content.map((item, i) => (
             <li key={i}>{renderCellContent(item)}</li>
           ))}
         </ul>
       );
     }
 
-    if (typeof content === 'object') {
+    if (isRecord(content)) {
       return (
         <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs border border-gray-100 dark:border-gray-700 min-w-[150px]">
           {Object.entries(content).map(([key, val]) => (
@@ -212,8 +249,10 @@ function AnalysisContent() {
     return String(content);
   };
 
-  const renderTable = (data: any) => {
-    const items = Array.isArray(data) ? data : (data?.items || []);
+  const renderTable = (data: unknown) => {
+    const items = Array.isArray(data)
+      ? data.filter(isRecord)
+      : (isRecord(data) && Array.isArray(data.items) ? data.items.filter(isRecord) : []);
     if (!items || items.length === 0) return <div className="text-gray-500 italic p-4">데이터가 없습니다.</div>;
 
     const headers = Object.keys(items[0]);
@@ -231,7 +270,7 @@ function AnalysisContent() {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-            {items.map((row: any, idx: number) => (
+            {items.map((row, idx) => (
               <tr key={idx} className="even:bg-gray-50/50 dark:even:bg-gray-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                 {headers.map((header) => (
                   <td key={`${idx}-${header}`} className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 align-top">

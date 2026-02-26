@@ -33,6 +33,8 @@ async def upload_rfp(
             "user_id": user_id,
             "message": "파일 업로드 및 파싱이 완료되었습니다."
         }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import traceback
         traceback.print_exc()

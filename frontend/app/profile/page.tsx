@@ -10,6 +10,8 @@ import { getCurrentUser, updateUserProfile } from "@/lib/api";
 
 export default function ProfilePage() {
   const router = useRouter();
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : "프로필 업데이트 중 오류가 발생했습니다.";
   const [companyName, setCompanyName] = useState("");
   const [region, setRegion] = useState("");
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
@@ -111,8 +113,8 @@ export default function ProfilePage() {
         : [];
       setLicenseList(licenses.length > 0 ? licenses : [""]);
       setSuccess("프로필 정보가 성공적으로 업데이트되었습니다.");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }

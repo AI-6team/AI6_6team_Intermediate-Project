@@ -39,6 +39,8 @@ def extract_document(
             "user_id": user_id,
             "data": results,
         }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"추출 실패: {str(e)}")
     except Exception as e:
         import traceback
 

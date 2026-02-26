@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/api";
@@ -8,7 +8,10 @@ import { apiUrl } from "@/lib/api";
 export default function HomePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("token"));
+  });
 
   // 로그인 상태
   const [loginId, setLoginId] = useState("");
@@ -22,11 +25,6 @@ export default function HomePage() {
   const [regRole, setRegRole] = useState<"member" | "leader">("member");
   const [regPw, setRegPw] = useState("");
   const [regPw2, setRegPw2] = useState("");
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) setIsLoggedIn(true);
-  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");

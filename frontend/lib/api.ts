@@ -28,6 +28,60 @@ export interface DecisionSummary {
   n_green: number;
 }
 
+export interface UploadDocumentResponse {
+  status: string;
+  doc_id: string;
+  doc_hash: string;
+  filename: string;
+  chunk_count: number;
+  table_count: number;
+  user_id: string;
+  message: string;
+}
+
+export interface ExtractionSlotData {
+  value?: unknown;
+  evidence?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export type ExtractionSlotValue =
+  | ExtractionSlotData
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
+
+export interface ExtractionData {
+  g1?: Record<string, ExtractionSlotValue>;
+  g2?: Record<string, ExtractionSlotValue>;
+  g3?: Record<string, ExtractionSlotValue>;
+  g4?: unknown;
+  [key: string]: unknown;
+}
+
+export interface ExtractionResponse {
+  status: string;
+  doc_id: string;
+  data: ExtractionData;
+}
+
+export interface ValidationRequest {
+  doc_hash: string;
+  slots: Record<string, unknown>;
+}
+
+export interface ValidationResult {
+  slot_key: string;
+  decision: string;
+  reasons?: string[];
+  evidence?: Array<Record<string, unknown>>;
+  risk_level?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
 export interface UserInfo {
   username: string;
   name: string;
@@ -66,7 +120,7 @@ export async function getDocuments(): Promise<RFPDocument[]> {
   return res.json();
 }
 
-export async function uploadDocument(file: File): Promise<any> {
+export async function uploadDocument(file: File): Promise<UploadDocumentResponse> {
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(apiUrl("/api/v1/ingest/upload"), {
@@ -85,7 +139,7 @@ export async function uploadDocument(file: File): Promise<any> {
 
 export async function runExtraction(
   docHash: string
-): Promise<{ status: string; doc_id: string; data: any }> {
+): Promise<ExtractionResponse> {
   const res = await fetch(apiUrl(`/api/v1/extract/${docHash}`), {
     method: "POST",
     headers: getAuthHeaders(),
@@ -99,7 +153,7 @@ export async function runExtraction(
 
 export async function getExtractionResult(
   docHash: string
-): Promise<{ status: string; doc_id: string; data: any } | null> {
+): Promise<ExtractionResponse | null> {
   try {
     const res = await fetch(apiUrl(`/api/v1/extract/${docHash}`), {
       headers: getAuthHeaders(),
@@ -114,8 +168,8 @@ export async function getExtractionResult(
 // ── Validation ───────────────────────────────────────────────────
 
 export async function runValidation(
-  matrix: any
-): Promise<any[]> {
+  matrix: ValidationRequest
+): Promise<ValidationResult[]> {
   const res = await fetch(apiUrl("/api/v1/validate"), {
     method: "POST",
     headers: getAuthHeaders(),

@@ -150,6 +150,18 @@ def main() -> None:
     api_port = str(api_port_int)
     web_port = str(web_port_int)
     env.setdefault("NEXT_PUBLIC_API_BASE_URL", f"http://localhost:{api_port}")
+    configured_origins = [
+        origin.strip()
+        for origin in env.get("BIDFLOW_CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    if not configured_origins:
+        configured_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    runtime_origins = [f"http://localhost:{web_port}", f"http://127.0.0.1:{web_port}"]
+    for origin in runtime_origins:
+        if origin not in configured_origins:
+            configured_origins.append(origin)
+    env["BIDFLOW_CORS_ORIGINS"] = ",".join(configured_origins)
 
     if not os.path.exists(os.path.join(FRONTEND_DIR, "package.json")):
         raise FileNotFoundError(

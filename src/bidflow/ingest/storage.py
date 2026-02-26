@@ -8,6 +8,10 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document as LancChainDocument
 
 
+def _read_env_secret(name: str) -> str:
+    return os.getenv(name, "").strip().strip('"').strip("'")
+
+
 class StorageRegistry:
     """config 기반 스토리지 공간 경로 계산기."""
 
@@ -436,7 +440,14 @@ class VectorStoreManager:
         else:
             self.collection_name = f"bidflow_rfp_{self.user_id}"
 
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        api_key = _read_env_secret("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY가 설정되지 않았습니다. "
+                ".env 또는 실행 환경 변수에 OPENAI_API_KEY를 설정한 뒤 다시 실행하세요."
+            )
+
+        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=api_key)
         self.vector_db = Chroma(
             persist_directory=self.persist_directory,
             embedding_function=self.embeddings,

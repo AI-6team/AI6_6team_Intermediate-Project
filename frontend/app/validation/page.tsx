@@ -3,14 +3,46 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { getCurrentUser, getDocuments, getExtractionResult, runExtraction, runValidation, RFPDocument } from '@/lib/api';
+import {
+  getCurrentUser,
+  getDocuments,
+  getExtractionResult,
+  runExtraction,
+  runValidation,
+  RFPDocument,
+  ValidationResult as ApiValidationResult,
+} from '@/lib/api';
 import UserHeader from '@/components/UserHeader';
 import Modal from '@/components/Modal';
 import validationIcon from '../images/validation.png';
 
 const VALIDATION_RUNNING_KEY = "validation_running_doc_hash";
 
-function ValidationResultItem({ res, index }: { res: any, index: number }) {
+interface ValidationEvidence {
+  text_snippet?: string;
+  [key: string]: unknown;
+}
+
+interface ValidationResultItemData extends ApiValidationResult {
+  rule_id?: string | number;
+  evidence?: ValidationEvidence[];
+}
+
+interface AnalysisData {
+  g3?: Record<string, unknown>;
+  matrix?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function ValidationResultItem({ res, index }: { res: ValidationResultItemData, index: number }) {
   const [expanded, setExpanded] = useState(false);
   const [reasonExpanded, setReasonExpanded] = useState(false);
   const evidenceText = res.evidence?.[0]?.text_snippet || "";
@@ -67,7 +99,7 @@ function ValidationResultItem({ res, index }: { res: any, index: number }) {
             <span className="shrink-0 font-semibold text-xs uppercase text-indigo-500 dark:text-indigo-400 mt-0.5">Evidence</span>
             <div className="flex-1">
               <p className="italic">
-                "{isLong && !expanded ? `${evidenceText.slice(0, 150)}...` : evidenceText}"
+                &quot;{isLong && !expanded ? `${evidenceText.slice(0, 150)}...` : evidenceText}&quot;
               </p>
               {isLong && (
                 <button
@@ -113,11 +145,16 @@ export default function ValidationPage() {
     return "";
   });
   const [validating, setValidating] = useState(false);
-  const [validationResults, setValidationResults] = useState<any[] | null>(() => {
+  const [validationResults, setValidationResults] = useState<ValidationResultItemData[] | null>(() => {
     if (typeof window !== "undefined") {
       const docId = localStorage.getItem("cached_validation_docId") || "";
       if (docId) {
-        try { return JSON.parse(localStorage.getItem(`validation_result_${docId}`) || "null"); } catch { return null; }
+        try {
+          const parsed = JSON.parse(localStorage.getItem(`validation_result_${docId}`) || "null");
+          return Array.isArray(parsed) ? (parsed as ValidationResultItemData[]) : null;
+        } catch {
+          return null;
+        }
       }
     }
     return null;
@@ -184,10 +221,10 @@ export default function ValidationPage() {
       try {
         const cached = JSON.parse(savedValidation);
         if (cached && Array.isArray(cached)) {
-          setValidationResults(cached);
+          setValidationResults(cached as ValidationResultItemData[]);
           return; // 캐시 결과 있으면 재검증 생략
         }
-      } catch (e) {
+      } catch {
         // 캐시 파싱 실패 시 재검증 진행
       }
     }
@@ -200,9 +237,9 @@ export default function ValidationPage() {
 
   const stats = validationResults ? {
     total: validationResults.length,
-    passed: validationResults.filter((r: any) => r.decision === 'GREEN').length,
-    failed: validationResults.filter((r: any) => r.decision === 'RED').length,
-    pending: validationResults.filter((r: any) => r.decision !== 'GREEN' && r.decision !== 'RED').length,
+    passed: validationResults.filter((r) => r.decision === 'GREEN').length,
+    failed: validationResults.filter((r) => r.decision === 'RED').length,
+    pending: validationResults.filter((r) => r.decision !== 'GREEN' && r.decision !== 'RED').length,
   } : { total: 0, passed: 0, failed: 0, pending: 0 };
 
   const handleValidate = async () => {
@@ -215,15 +252,15 @@ export default function ValidationPage() {
     // 기존 결과를 유지하면서 로딩 표시 (null로 초기화하지 않음)
 
     try {
-      let analysisData = null;
+      let analysisData: AnalysisData | null = null;
 
       // 1. 로컬 스토리지에서 분석 결과 확인
       const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`) || localStorage.getItem(`analysis_result_${docHash}`);
       if (savedResult) {
         try {
           analysisData = JSON.parse(savedResult);
-        } catch (e) {
-          console.error("Error parsing saved result:", e);
+        } catch (parseError) {
+          console.error("Error parsing saved result:", parseError);
         }
       }
 
@@ -246,11 +283,12 @@ export default function ValidationPage() {
 
       if (analysisData) {
         const g3 = analysisData.g3 || analysisData.matrix || {}; // g3 또는 matrix 키 확인
+        const slots = isRecord(g3) ? g3 : {};
 
         // 2. 검증 요청 페이로드 구성
         const matrix = {
           doc_hash: docHash,
-          slots: { ...g3 }
+          slots
         };
 
         // 3. 검증 실행
@@ -262,15 +300,15 @@ export default function ValidationPage() {
           } else {
             setError("검증 결과가 비어있습니다.");
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error(e);
-          setError(e.message || "검증 요청 중 오류가 발생했습니다.");
+          setError(getErrorMessage(e, "검증 요청 중 오류가 발생했습니다."));
         }
       } else {
         setError("분석 데이터를 찾을 수 없습니다. 먼저 '분석 결과' 페이지에서 분석을 실행해주세요.");
       }
-    } catch (e: any) {
-      setError(e?.message || "검증 중 오류가 발생했습니다.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "검증 중 오류가 발생했습니다."));
     } finally {
       if (localStorage.getItem(VALIDATION_RUNNING_KEY) === docHash) {
         localStorage.removeItem(VALIDATION_RUNNING_KEY);
