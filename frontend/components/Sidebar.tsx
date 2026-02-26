@@ -2,7 +2,7 @@
 
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import logo from "../app/images/logo_wh.png";
 import logoWh from "../app/images/logo_bk.png";
 import homeIcon from "../app/images/home.png";
@@ -17,13 +17,46 @@ interface SidebarLinkProps {
   isCollapsed: boolean;
 }
 
-function getInitialDarkMode(): boolean {
-  if (typeof window === "undefined") return false;
+const THEME_CHANGE_EVENT = "bidflow-theme-change";
 
+function getClientThemeSnapshot(): boolean {
+  if (typeof window === "undefined") return false;
   const stored = localStorage.getItem("theme");
   if (stored === "dark") return true;
   if (stored === "light") return false;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function getServerThemeSnapshot(): boolean {
+  return false;
+}
+
+function subscribeTheme(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const onStorage = (event: StorageEvent) => {
+    if (!event.key || event.key === "theme") onStoreChange();
+  };
+  const onThemeChange = () => onStoreChange();
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(THEME_CHANGE_EVENT, onThemeChange);
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", onThemeChange);
+  } else {
+    media.addListener(onThemeChange);
+  }
+
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(THEME_CHANGE_EVENT, onThemeChange);
+    if (typeof media.removeEventListener === "function") {
+      media.removeEventListener("change", onThemeChange);
+    } else {
+      media.removeListener(onThemeChange);
+    }
+  };
 }
 
 function SidebarLink({ href, icon, label, isCollapsed }: SidebarLinkProps) {
@@ -49,13 +82,24 @@ function SidebarLink({ href, icon, label, isCollapsed }: SidebarLinkProps) {
 }
 
 export default function Sidebar() {
-  const [darkMode, setDarkMode] = useState<boolean>(getInitialDarkMode);
+  const darkMode = useSyncExternalStore(
+    subscribeTheme,
+    getClientThemeSnapshot,
+    getServerThemeSnapshot
+  );
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
-    localStorage.setItem("theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    if (typeof window === "undefined") return;
+    const next = !darkMode;
+    localStorage.setItem("theme", next ? "dark" : "light");
+    document.documentElement.classList.toggle("dark", next);
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+  };
 
   return (
     <aside
@@ -121,7 +165,7 @@ export default function Sidebar() {
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
         <button
-          onClick={() => setDarkMode((prev) => !prev)}
+          onClick={toggleDarkMode}
           className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors whitespace-nowrap overflow-hidden relative group"
         >
           {isCollapsed ? (darkMode ? "🌞" : "🌙") : darkMode ? "🌞 라이트 모드" : "🌙 다크 모드"}
