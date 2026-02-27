@@ -1,8 +1,0 @@
-phase,config,kw_acc_mean,kw_acc_std,kw_v2_mean,kw_v2_std
-norm_x_config,P0_verbatim_elbow,0.6584,0.0083,0.6651,0.0084
-norm_x_config,P0_verbatim_fixed15,0.6487,0.0182,0.6548,0.0184
-norm_x_config,P1_extract_elbow,0.6884,0.0211,0.7005,0.0236
-norm_x_config,P1_extract_fixed15,0.6956,0.0051,0.7022,0.0015
-typed_cut,R0_uniform_elbow,0.7159,0.0104,0.7226,0.0078
-typed_cut,R1_typed_cut,0.691,0.0191,0.6935,0.0196
-integrated,FINAL_v6,0.7152,0.0027,0.724,0.0021
