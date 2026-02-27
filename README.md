@@ -123,7 +123,7 @@ Data Layer
   - Prompt V5 (8규칙), SC 5회 (temp 0.0~0.5), stability_v1 후처리
   - 운영 선택: first_deterministic (temp=0.0), oracle gap 2.33pp
 
-> 설정값별 확정 근거는 [종합 보고서 > 4.7 최종 확정 파이프라인 설정](docs/최종_종합보고서.md#47-최종-확정-파이프라인-설정-exp21-p1--exp22-기준) 참고
+> 설정값별 확정 근거는 [종합 보고서 > 4.7 최종 확정 파이프라인 설정](docs/final_comprehensive_report.md#47-최종-확정-파이프라인-설정-exp21-p1--exp22-기준) 참고
 
 ### 4.5 G1~G4 멀티스텝 추출
 
@@ -200,7 +200,7 @@ Data Layer
   - HWP Deep Scan: 숨은 스트림 스캔 (`parsing/hwp_parser.py`)
   - 보안 로그: `logs/security.log`, `logs/audit.log` 회전 기록
 
-> 보안 설계 원칙 및 PII 패턴 상세는 [종합 보고서 > 6. 보안 설계 및 적용 상태](docs/최종_종합보고서.md#6-보안-설계-및-적용-상태) 참고
+> 보안 설계 원칙 및 PII 패턴 상세는 [종합 보고서 > 6. 보안 설계 및 적용 상태](docs/final_comprehensive_report.md#6-보안-설계-및-적용-상태) 참고
 
 ## 5) API 엔드포인트 요약
 
@@ -256,8 +256,8 @@ Data Layer
 - `Oracle/Non-oracle`: SC 5회 생성 후 GT 기반 최선 선택(oracle) vs temp=0.0 고정 선택(non-oracle). oracle gap=2.33pp
 - `Faithfulness/Context Recall`: RAGAS 표준 지표. 응답 근거 충실도 / 컨텍스트 회수율
 
-> 지표 계산식 상세 및 버전별 변경점은 [종합 보고서 > 3.2 지표](docs/최종_종합보고서.md#32-지표) 참고
-> 실험별 의사결정 로그(막힘→다음 실험 연결)와 상세 수치는 [종합 보고서 > 4. 실험 여정](docs/최종_종합보고서.md#4-실험-여정-막힘과-다음-실험의-연결) 참고
+> 지표 계산식 상세 및 버전별 변경점은 [종합 보고서 > 3.2 지표](docs/final_comprehensive_report.md#32-지표) 참고
+> 실험별 의사결정 로그(막힘→다음 실험 연결)와 상세 수치는 [종합 보고서 > 4. 실험 여정](docs/final_comprehensive_report.md#4-실험-여정-막힘과-다음-실험의-연결) 참고
 
 ## 7) 프로젝트 구조
 
@@ -360,9 +360,9 @@ pytest tests/security -q
 
 ## 12) 참고 문서
 
-- 종합 보고서: [docs/최종_종합보고서.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/%EC%B5%9C%EC%A2%85_%EC%A2%85%ED%95%A9%EB%B3%B4%EA%B3%A0%EC%84%9C.md)
-- 중간 발표 보고서(노트북): [docs/중간발표보고서.ipynb](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/%EC%A4%91%EA%B0%84%EB%B0%9C%ED%91%9C%EB%B3%B4%EA%B3%A0%EC%84%9C.ipynb)
-- 중간 발표 통합 보고서: [docs/중간발표_통합보고서.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/%EC%A4%91%EA%B0%84%EB%B0%9C%ED%91%9C_%ED%86%B5%ED%95%A9%EB%B3%B4%EA%B3%A0%EC%84%9C.md)
+- 종합 보고서: `docs/final_comprehensive_report.md`
+- 중간 발표 보고서(노트북): `docs/intermediate_presentation_report.ipynb`
+- 중간 발표 통합 보고서: `docs/intermediate_presentation_integrated_report.md`
 - 실험 전체 이력: [docs/planning/HISTORY_v2_execution.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/planning/HISTORY_v2_execution.md)
 - 단일화 실행 기록: [docs/planning/next_fastapi_unification_execution_2026-02-26.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/planning/next_fastapi_unification_execution_2026-02-26.md)
 - 보안 아키텍처: [src/bidflow/security/README.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/src/bidflow/security/README.md)
@@ -384,7 +384,7 @@ pytest tests/security -q
 | 5 | 보안 확장 | Process/Output Rail 전면 적용, Redis 기반 분산 rate limiting |
 | 6 | DB 운영 튜닝 | PostgreSQL 인덱스/커넥션 풀/백업·복구 리허설 |
 
-> 상세 한계 분석 및 근거는 [종합 보고서 > 9. 한계와 다음 단계](docs/최종_종합보고서.md#9-한계와-다음-단계) 참고
+> 상세 한계 분석 및 근거는 [종합 보고서 > 9. 한계와 다음 단계](docs/final_comprehensive_report.md#9-한계와-다음-단계) 참고
 
 ## 15) Contributors
 
