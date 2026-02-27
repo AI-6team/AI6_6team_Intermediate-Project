@@ -360,10 +360,12 @@ pytest tests/security -q
 
 ## 12) 참고 문서
 
-- 종합 보고서: `docs/최종_종합보고서.md`
-- 실험 전체 이력: `docs/planning/HISTORY_v2_execution.md`
-- 단일화 실행 기록: `docs/planning/next_fastapi_unification_execution_2026-02-26.md`
-- 보안 아키텍처: `src/bidflow/security/README.md`
+- 종합 보고서: [docs/최종_종합보고서.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/%EC%B5%9C%EC%A2%85_%EC%A2%85%ED%95%A9%EB%B3%B4%EA%B3%A0%EC%84%9C.md)
+- 중간 발표 보고서(노트북): [docs/중간발표보고서.ipynb](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/%EC%A4%91%EA%B0%84%EB%B0%9C%ED%91%9C%EB%B3%B4%EA%B3%A0%EC%84%9C.ipynb)
+- 중간 발표 통합 보고서: [docs/중간발표_통합보고서.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/%EC%A4%91%EA%B0%84%EB%B0%9C%ED%91%9C_%ED%86%B5%ED%95%A9%EB%B3%B4%EA%B3%A0%EC%84%9C.md)
+- 실험 전체 이력: [docs/planning/HISTORY_v2_execution.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/planning/HISTORY_v2_execution.md)
+- 단일화 실행 기록: [docs/planning/next_fastapi_unification_execution_2026-02-26.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/planning/next_fastapi_unification_execution_2026-02-26.md)
+- 보안 아키텍처: [src/bidflow/security/README.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/src/bidflow/security/README.md)
 
 ## 13) 데이터/보안 정책
 
