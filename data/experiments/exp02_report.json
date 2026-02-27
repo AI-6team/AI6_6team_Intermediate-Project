@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "experiment": "Exp-02 Retrieval Strategy Optimization",
+    "version": "v1",
+    "date": "2026-02-09T14:16:13.859750",
+    "sample_file": "../data/raw/files\\고려대학교_차세대 포털·학사 정보시스템 구축사업.pdf",
+    "num_test_cases": 30,
+    "prerequisite": {
+      "exp01_chunk_size": 500,
+      "exp01_table_strategy": "layout",
+      "exp01_context_recall": 0.7333333333333333
+    }
+  },
+  "best_config": {
+    "alpha": 0.5,
+    "top_k": 15,
+    "context_recall": 0.7666666666666667,
+    "context_precision": 0.49614161306274496,
+    "mrr": 0.41948412698412696
+  },
+  "experiment_variables": {
+    "alphas": [
+      0.0,
+      0.3,
+      0.5,
+      0.7,
+      1.0
+    ],
+    "top_ks": [
+      5,
+      10,
+      15
+    ]
+  },
+  "results": [
+    {
+      "config": "alpha=0.0_topk=5",
+      "alpha": 0.0,
+      "top_k": 5,
+      "mrr": 0.3605555555555556,
+      "context_recall": 0.45,
+      "context_precision": 0.5473611110857929,
+      "retrieval_time": 3.804109000018798,
+      "ragas_time": 430.89948000002187,
+      "latency_total": 434.7042963000131
+    },
+    {
+      "config": "alpha=0.0_topk=10",
+      "alpha": 0.0,
+      "top_k": 10,
+      "mrr": 0.37361111111111106,
+      "context_recall": 0.7,
+      "context_precision": 0.47106854159668593,
+      "retrieval_time": 3.2212100999895483,
+      "ragas_time": 700.619523899979,
+      "latency_total": 703.8415224999771
+    },
+    {
+      "config": "alpha=0.0_topk=15",
+      "alpha": 0.0,
+      "top_k": 15,
+      "mrr": 0.3766414141414141,
+      "context_recall": 0.7333333333333333,
+      "context_precision": 0.4568491652692129,
+      "retrieval_time": 3.8502887999638915,
+      "ragas_time": 1063.1834259000025,
+      "latency_total": 1067.0347809999948
+    },
+    {
+      "config": "alpha=0.3_topk=5",
+      "alpha": 0.3,
+      "top_k": 5,
+      "mrr": 0.40555555555555556,
+      "context_recall": 0.5444444444444444,
+      "context_precision": 0.5292592592337931,
+      "retrieval_time": 3.6800366999814287,
+      "ragas_time": 402.88058759999694,
+      "latency_total": 406.56143439997686
+    },
+    {
+      "config": "alpha=0.3_topk=10",
+      "alpha": 0.3,
+      "top_k": 10,
+      "mrr": 0.41059523809523807,
+      "context_recall": 0.6095238095238095,
+      "context_precision": 0.5077737360205921,
+      "retrieval_time": 5.085632200003602,
+      "ragas_time": 734.3981107000145,
+      "latency_total": 739.4846383000258
+    },
+    {
+      "config": "alpha=0.3_topk=15",
+      "alpha": 0.3,
+      "top_k": 15,
+      "mrr": 0.4189529914529915,
+      "context_recall": 0.7333333333333333,
+      "context_precision": 0.47330992697717833,
+      "retrieval_time": 3.7957391999661922,
+      "ragas_time": 957.1270619000425,
+      "latency_total": 960.9239460999961
+    },
+    {
+      "config": "alpha=0.5_topk=5",
+      "alpha": 0.5,
+      "top_k": 5,
+      "mrr": 0.39722222222222225,
+      "context_recall": 0.6,
+      "context_precision": 0.5929629629272485,
+      "retrieval_time": 3.9200844999868423,
+      "ragas_time": 480.3142170999781,
+      "latency_total": 484.2350142999785
+    },
+    {
+      "config": "alpha=0.5_topk=10",
+      "alpha": 0.5,
+      "top_k": 10,
+      "mrr": 0.40785714285714286,
+      "context_recall": 0.6976190476190477,
+      "context_precision": 0.5280149281745579,
+      "retrieval_time": 3.395479400001932,
+      "ragas_time": 772.1061970000155,
+      "latency_total": 775.5024339000229
+    },
+    {
+      "config": "alpha=0.5_topk=15",
+      "alpha": 0.5,
+      "top_k": 15,
+      "mrr": 0.41948412698412696,
+      "context_recall": 0.7666666666666667,
+      "context_precision": 0.49614161306274496,
+      "retrieval_time": 3.568775799998548,
+      "ragas_time": 1043.5949091999792,
+      "latency_total": 1047.1646399999736
+    },
+    {
+      "config": "alpha=0.7_topk=5",
+      "alpha": 0.7,
+      "top_k": 5,
+      "mrr": 0.4038888888888889,
+      "context_recall": 0.6880952380952381,
+      "context_precision": 0.5656944444115243,
+      "retrieval_time": 3.62069159996463,
+      "ragas_time": 371.81044869998004,
+      "latency_total": 375.4318085999694
+    },
+    {
+      "config": "alpha=0.7_topk=10",
+      "alpha": 0.7,
+      "top_k": 10,
+      "mrr": 0.3917989417989418,
+      "context_recall": 0.7357142857142857,
+      "context_precision": 0.5346192470577715,
+      "retrieval_time": 4.1917041999986395,
+      "ragas_time": 697.1523699000245,
+      "latency_total": 701.3448264999897
+    },
+    {
+      "config": "alpha=0.7_topk=15",
+      "alpha": 0.7,
+      "top_k": 15,
+      "mrr": 0.40904761904761905,
+      "context_recall": 0.7333333333333333,
+      "context_precision": 0.5425019690648268,
+      "retrieval_time": 4.091992000001483,
+      "ragas_time": 958.3076579000335,
+      "latency_total": 962.4007258000202
+    },
+    {
+      "config": "alpha=1.0_topk=5",
+      "alpha": 1.0,
+      "top_k": 5,
+      "mrr": 0.3327777777777778,
+      "context_recall": 0.5,
+      "context_precision": 0.5882870370005954,
+      "retrieval_time": 3.490764499991201,
+      "ragas_time": 385.2320736999973,
+      "latency_total": 388.7235315000289
+    },
+    {
+      "config": "alpha=1.0_topk=10",
+      "alpha": 1.0,
+      "top_k": 10,
+      "mrr": 0.3462037037037037,
+      "context_recall": 0.7166666666666667,
+      "context_precision": 0.5480794070435168,
+      "retrieval_time": 3.3453241999959573,
+      "ragas_time": 649.449169999978,
+      "latency_total": 652.7953096000128
+    },
+    {
+      "config": "alpha=1.0_topk=15",
+      "alpha": 1.0,
+      "top_k": 15,
+      "mrr": 0.3489814814814815,
+      "context_recall": 0.7333333333333333,
+      "context_precision": 0.499199877262884,
+      "retrieval_time": 3.7576492999796756,
+      "ragas_time": 947.9496065999847,
+      "latency_total": 951.7085091999616
+    }
+  ]
+}

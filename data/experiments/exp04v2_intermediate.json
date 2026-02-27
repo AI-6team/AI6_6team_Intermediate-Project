@@ -1,0 +1,54 @@
+{
+  "completed": 4,
+  "total": 4,
+  "results": [
+    {
+      "config": "A_baseline",
+      "description": "Baseline (chunk=500)",
+      "faithfulness": 0.817402576181988,
+      "answer_relevancy": 0.4905625945774757,
+      "context_recall": 0.7333333333333333,
+      "keyword_accuracy": 0.6630342604878209,
+      "gen_time": 374.8661519000307,
+      "ragas_time": 1279.955348300049,
+      "latency_total": 1654.8220017000567,
+      "num_docs": 1005
+    },
+    {
+      "config": "B_large_chunk",
+      "description": "Large Chunk (1000)",
+      "faithfulness": 0.8237304343859816,
+      "answer_relevancy": 0.5110002345070794,
+      "context_recall": 0.7166666666666667,
+      "keyword_accuracy": 0.6011318942781789,
+      "gen_time": 375.3302451999625,
+      "ragas_time": 1346.8079355999944,
+      "latency_total": 1722.1387077999534,
+      "num_docs": 724
+    },
+    {
+      "config": "D0_section_aware",
+      "description": "Section-aware + Header Prefix",
+      "faithfulness": 0.8028629426129427,
+      "answer_relevancy": 0.5205750644335893,
+      "context_recall": 0.6261904761904762,
+      "keyword_accuracy": 0.569055195177486,
+      "gen_time": 424.64256900001783,
+      "ragas_time": 1316.3550327999983,
+      "latency_total": 1740.9979821000015,
+      "num_docs": 831
+    },
+    {
+      "config": "T0_table_dual",
+      "description": "Section + Table Dual-Index",
+      "faithfulness": 0.7775665579041944,
+      "answer_relevancy": 0.4799542974658421,
+      "context_recall": 0.6095238095238095,
+      "keyword_accuracy": 0.553603034249319,
+      "gen_time": 385.61459419998573,
+      "ragas_time": 1235.4810477999854,
+      "latency_total": 1621.0961577999988,
+      "num_docs": 1202
+    }
+  ]
+}

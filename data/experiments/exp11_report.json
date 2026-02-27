@@ -1,0 +1,89 @@
+{
+  "experiment": "exp11_comprehensive_optimization",
+  "phases": "F+G+H+I+J",
+  "date": "2026-02-22T15:57:53.949334",
+  "baseline": "c500_pv2 (kw_v2=0.814)",
+  "n_questions": 30,
+  "total_time_sec": 2558.4,
+  "total_evals": 120,
+  "total_errors": 0,
+  "configs": [
+    {
+      "label": "ref_v2",
+      "description": "Phase E c500_pv2 결과 재활용 (kw_v2 참조)",
+      "needs_api": false
+    },
+    {
+      "label": "prompt_v3",
+      "description": "Phase F: 강화된 verbatim 프롬프트 (타입 무관)",
+      "needs_api": true,
+      "use_routing": false,
+      "use_section_expansion": false,
+      "use_retry": false
+    },
+    {
+      "label": "route_type",
+      "description": "Phase F: 질문 타입별 프롬프트 라우팅",
+      "needs_api": true,
+      "use_routing": true,
+      "use_section_expansion": false,
+      "use_retry": false
+    },
+    {
+      "label": "section_ctx",
+      "description": "Phase G: 섹션 키워드 query expansion + 타입 라우팅",
+      "needs_api": true,
+      "use_routing": true,
+      "use_section_expansion": true,
+      "use_retry": false
+    },
+    {
+      "label": "coverage_retry",
+      "description": "Phase H: section_ctx + coverage 검증 + 1회 재생성",
+      "needs_api": true,
+      "use_routing": true,
+      "use_section_expansion": true,
+      "use_retry": true
+    }
+  ],
+  "results": {
+    "kw_v2": {
+      "coverage_retry": 0.8007,
+      "prompt_v3": 0.7824,
+      "ref_v2": 0.8136,
+      "route_type": 0.8059,
+      "section_ctx": 0.7749
+    },
+    "kw_v3": {
+      "coverage_retry": 0.8724,
+      "prompt_v3": 0.8646,
+      "ref_v2": 0.8961,
+      "route_type": 0.8853,
+      "section_ctx": 0.8587
+    },
+    "v2_perfect": {
+      "coverage_retry": 15,
+      "prompt_v3": 15,
+      "ref_v2": 15,
+      "route_type": 15,
+      "section_ctx": 14
+    },
+    "v3_perfect": {
+      "coverage_retry": 19,
+      "prompt_v3": 19,
+      "ref_v2": 19,
+      "route_type": 19,
+      "section_ctx": 18
+    },
+    "total_time": {
+      "coverage_retry": 47.1451,
+      "prompt_v3": 11.4554,
+      "ref_v2": 13.4061,
+      "route_type": 13.0357,
+      "section_ctx": 13.6416
+    }
+  },
+  "best_config": "ref_v2",
+  "best_kw_v3": 0.8961,
+  "errors": []
+}
