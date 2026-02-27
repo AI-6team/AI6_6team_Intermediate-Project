@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from bidflow.api.deps import get_current_user
+from bidflow.api.profile_utils import build_effective_profile, parse_licenses
 from bidflow.api.rate_limit import RateLimitMiddleware
 from bidflow.api.routers import extract, ingest, validate
 from bidflow.db import crud
@@ -87,9 +88,7 @@ class UserRegister(BaseModel):
 
 
 def _parse_licenses(licenses_raw: Optional[str]) -> List[str]:
-    if not licenses_raw:
-        return []
-    return [s.strip() for s in str(licenses_raw).split(",") if s and s.strip()]
+    return parse_licenses(licenses_raw)
 
 
 def _normalize_company_logo(raw: Optional[str]) -> Optional[str]:
@@ -129,30 +128,7 @@ def _load_team_profile(current_user: Dict[str, Any]) -> Optional[CompanyProfile]
 
 def _build_effective_profile(current_user: Dict[str, Any]) -> CompanyProfile:
     """팀 공유 프로필이 있으면 우선 사용하고, 없으면 사용자 정보를 fallback으로 사용합니다."""
-    team_profile = _load_team_profile(current_user)
-    if team_profile:
-        data = dict(team_profile.data or {})
-        raw_licenses = data.get("licenses", [])
-        if isinstance(raw_licenses, list):
-            licenses = [str(x).strip() for x in raw_licenses if str(x).strip()]
-        elif isinstance(raw_licenses, str):
-            licenses = _parse_licenses(raw_licenses)
-        else:
-            licenses = _parse_licenses(current_user.get("licenses", ""))
-        data["licenses"] = licenses
-        data["region"] = str(data.get("region", "")).strip()
-        return CompanyProfile(
-            id=str(team_profile.id),
-            name=team_profile.name or (current_user.get("team") or ""),
-            data=data,
-        )
-
-    licenses_list = _parse_licenses(current_user.get("licenses", ""))
-    return CompanyProfile(
-        id=current_user.get("username", "unknown"),
-        name=current_user.get("team", ""),
-        data={"licenses": licenses_list, "region": ""},
-    )
+    return build_effective_profile(current_user)
 
 
 def _build_user_response(current_user: Dict[str, Any]) -> Dict[str, Any]:

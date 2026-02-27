@@ -282,8 +282,19 @@ export default function ValidationPage() {
       }
 
       if (analysisData) {
-        const g3 = analysisData.g3 || analysisData.matrix || {}; // g3 또는 matrix 키 확인
-        const slots = isRecord(g3) ? g3 : {};
+        // g1+g2+g3 전체 슬롯을 병합하여 팀 판정결과와 동일한 범위로 검증
+        const mergedSlots: Record<string, unknown> = {};
+        for (const group of ["g1", "g2", "g3"]) {
+          const groupData = analysisData[group];
+          if (isRecord(groupData)) {
+            Object.assign(mergedSlots, groupData);
+          }
+        }
+        // fallback: matrix 키가 있으면 사용
+        if (Object.keys(mergedSlots).length === 0 && isRecord(analysisData.matrix)) {
+          Object.assign(mergedSlots, analysisData.matrix);
+        }
+        const slots = mergedSlots;
 
         // 2. 검증 요청 페이로드 구성
         const matrix = {

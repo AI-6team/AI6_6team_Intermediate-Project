@@ -1,14 +1,15 @@
 # 프로덕션 환경 오버라이드 (base.yaml 위에 병합)
+# EXP22 최적값 기준 (kw_v5=0.9742, 3-run 검증 완료)
 env: production
 debug: false
 
 parsing:
-  chunk_overlap: 100
+  chunk_overlap: 50          # 최적값: 50 (EXP21/22 검증)
   table_integrity_threshold: 0.85
 
 model:
-  llm: gpt-5
-  embedding: text-embedding-3-large
+  llm: gpt-5-mini            # 최적값: gpt-5-mini (EXP22 검증)
+  embedding: text-embedding-3-small  # 최적값: small (EXP22 검증)
 
 rag:
   answer_postprocess: "off"

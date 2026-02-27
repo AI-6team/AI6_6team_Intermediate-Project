@@ -12,7 +12,9 @@ class ExtractionChain:
     기본 추출 체인 클래스
     """
     def __init__(self, model_name: str = "gpt-5-mini"): # Scenario B: gpt-5-mini
-        self.llm = ChatOpenAI(model=model_name, temperature=0)
+        # gpt-5-mini는 reasoning 모델로 temperature=1 필요
+        temp = 1 if model_name == "gpt-5-mini" else 0
+        self.llm = ChatOpenAI(model=model_name, temperature=temp)
 
     def _load_prompt(self, prompt_path: str) -> str:
         # 현재 파일 기준 상대 경로로 변환

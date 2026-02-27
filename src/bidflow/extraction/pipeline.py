@@ -25,9 +25,11 @@ class ExtractionPipeline:
         self.group_id = group_id
 
         if vector_manager is None:
+            import os
             from bidflow.core.config import get_config
 
-            registry = StorageRegistry(get_config("dev"))
+            env = os.getenv("BIDFLOW_ENV", "dev")
+            registry = StorageRegistry(get_config(env))
             vector_manager = VectorStoreManager(user_id=self.user_id, registry=registry)
         self.vector_manager = vector_manager
 
