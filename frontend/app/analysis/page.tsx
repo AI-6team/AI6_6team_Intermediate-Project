@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, type ReactNode } from 'react';
+import { useState, useEffect, useRef, Suspense, type ReactNode } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getDocuments, runExtraction, getExtractionResult, RFPDocument } from '@/lib/api';
@@ -62,6 +62,8 @@ function AnalysisContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const selectedDoc = documents.find((d) => (d.id || d.doc_hash) === selectedDocId);
   const selectedDocHash = selectedDoc?.doc_hash || selectedDocId;
+  const isMountedRef = useRef(true);
+  useEffect(() => { return () => { isMountedRef.current = false; }; }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -73,23 +75,35 @@ function AnalysisContent() {
   useEffect(() => {
     const fetchDocs = async () => {
       const token = localStorage.getItem("token");
-      if (!token) {
-        // Not pushing to router to avoid side-effects if this component is used elsewhere.
-        return;
-      }
-      try {
-        const docs: RFPDocument[] = await getDocuments();
-        setDocuments(docs);
+      if (!token) return;
 
+      const applyDocs = (docs: RFPDocument[]) => {
+        setDocuments(docs);
         const paramDocId = searchParams.get('docId');
         if (paramDocId && docs.some(d => (d.id || d.doc_hash) === paramDocId)) {
           setSelectedDocId(paramDocId);
         } else if (docs.length > 0) {
           setSelectedDocId(docs[0].id || docs[0].doc_hash);
         }
+      };
+
+      try {
+        const docs: RFPDocument[] = await getDocuments();
+        localStorage.setItem("cached_docs_analysis", JSON.stringify(docs));
+        applyDocs(docs);
       } catch (error) {
         console.error("Error fetching documents for analysis page:", error);
-        setError("문서 목록을 불러올 수 없습니다.");
+        // Backend may be busy with extraction - fall back to cached documents
+        const cachedDocs = localStorage.getItem("cached_docs_analysis");
+        if (cachedDocs) {
+          try {
+            applyDocs(JSON.parse(cachedDocs));
+          } catch {
+            setError("문서 목록을 불러올 수 없습니다.");
+          }
+        } else {
+          setError("문서 목록을 불러올 수 없습니다.");
+        }
       }
     };
     fetchDocs();
@@ -101,19 +115,23 @@ function AnalysisContent() {
 
     const loadResult = async () => {
       // 1. 서버에서 저장된 결과 조회
-      const serverResult = await getExtractionResult(selectedDocHash);
-      if (serverResult?.data) {
-        setResult(serverResult.data);
-        localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(serverResult.data));
-        localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(serverResult.data));
-        if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
-          localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+      try {
+        const serverResult = await getExtractionResult(selectedDocHash);
+        if (serverResult?.data) {
+          setResult(serverResult.data);
+          localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(serverResult.data));
+          localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(serverResult.data));
+          if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
+            localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+          }
+          setAnalyzing(false);
+          return;
         }
-        setAnalyzing(false);
-        return;
+      } catch {
+        // Server may be busy with extraction, fall through to localStorage
       }
 
-      // 2. 서버에 없으면 localStorage fallback
+      // 2. 서버에 없거나 접근 불가면 localStorage fallback
       const savedResult = localStorage.getItem(`analysis_result_${selectedDocId}`) || localStorage.getItem(`analysis_result_${selectedDocHash}`);
       if (savedResult) {
         try {
@@ -135,15 +153,24 @@ function AnalysisContent() {
     if (localStorage.getItem(ANALYSIS_RUNNING_KEY) !== selectedDocHash) return;
 
     let cancelled = false;
+    let polling = false;
     const poll = async () => {
-      const serverResult = await getExtractionResult(selectedDocHash);
-      if (!cancelled && serverResult?.data) {
-        setResult(serverResult.data);
-        localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(serverResult.data));
-        localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(serverResult.data));
-        localStorage.removeItem(ANALYSIS_RUNNING_KEY);
-        setAnalyzing(false);
-        return true;
+      if (polling) return false; // Prevent concurrent polls
+      polling = true;
+      try {
+        const serverResult = await getExtractionResult(selectedDocHash);
+        if (!cancelled && serverResult?.data) {
+          setResult(serverResult.data);
+          localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(serverResult.data));
+          localStorage.setItem(`analysis_result_${selectedDocHash}`, JSON.stringify(serverResult.data));
+          localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+          setAnalyzing(false);
+          return true;
+        }
+      } catch {
+        // Server may be busy with extraction, continue polling silently
+      } finally {
+        polling = false;
       }
       return false;
     };
@@ -170,6 +197,7 @@ function AnalysisContent() {
 
     try {
       const res = await runExtraction(selectedDocHash);
+      if (!isMountedRef.current) return; // Component unmounted during extraction
       if (res && res.data) {
         setResult(res.data);
         localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(res.data));
@@ -178,12 +206,15 @@ function AnalysisContent() {
         setError("분석 결과를 가져오지 못했습니다. 서버 로그를 확인해주세요.");
       }
     } catch {
+      if (!isMountedRef.current) return;
       setError("분석 중 오류가 발생했습니다.");
     } finally {
-      if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
-        localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+      if (isMountedRef.current) {
+        if (localStorage.getItem(ANALYSIS_RUNNING_KEY) === selectedDocHash) {
+          localStorage.removeItem(ANALYSIS_RUNNING_KEY);
+        }
+        setAnalyzing(false);
       }
-      setAnalyzing(false);
     }
   };
 

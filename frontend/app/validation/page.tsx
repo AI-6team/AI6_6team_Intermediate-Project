@@ -7,7 +7,6 @@ import {
   getCurrentUser,
   getDocuments,
   getExtractionResult,
-  runExtraction,
   runValidation,
   RFPDocument,
   ValidationResult as ApiValidationResult,
@@ -264,20 +263,13 @@ export default function ValidationPage() {
         }
       }
 
-      // 2. 로컬 스토리지에 없으면 API 호출 (Fallback)
+      // 2. 로컬 스토리지에 없으면 서버에서 기존 결과 조회 (자동 추출은 하지 않음)
       if (!analysisData) {
         const existingResult = await getExtractionResult(docHash);
         if (existingResult?.data) {
           analysisData = existingResult.data;
           localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(analysisData));
           localStorage.setItem(`analysis_result_${docHash}`, JSON.stringify(analysisData));
-        } else {
-          const extractionRes = await runExtraction(docHash);
-          if (extractionRes && extractionRes.data) {
-            analysisData = extractionRes.data;
-            localStorage.setItem(`analysis_result_${selectedDocId}`, JSON.stringify(analysisData));
-            localStorage.setItem(`analysis_result_${docHash}`, JSON.stringify(analysisData));
-          }
         }
       }
 
