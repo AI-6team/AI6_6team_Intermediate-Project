@@ -5,8 +5,7 @@ import asyncio
 import hashlib
 from fastapi import UploadFile
 from bidflow.domain.models import RFPDocument
-from bidflow.ingest.pdf_parser import PDFParser
-from bidflow.ingest.storage import DocumentStore, VectorStoreManager, StorageRegistry
+from bidflow.parsing.pdf_parser import PDFParser
 
 try:
     from bidflow.parsing.hwp_parser import HWPParser
@@ -15,7 +14,6 @@ except ImportError:
 
 class IngestService:
     def __init__(self):
-        # 파서는 상태가 없다면 한 번만 초기화해서 재사용
         self.pdf_parser = PDFParser()
         self.hwp_parser = HWPParser() if HWPParser else None
 
@@ -29,6 +27,7 @@ class IngestService:
     async def process_upload(self, file: UploadFile, user_id: str) -> RFPDocument:
         """
         업로드된 파일을 임시 저장하고, 파싱 및 DB 저장을 수행합니다.
+        모든 블로킹 I/O는 run_in_executor로 실행하여 이벤트 루프 차단을 방지합니다.
         """
         # 1. 임시 파일로 저장
         suffix = os.path.splitext(file.filename)[1].lower()
@@ -37,16 +36,32 @@ class IngestService:
             tmp_path = tmp.name
 
         try:
-            # 2. 파일 파싱 (확장자 분기)
+            # 2. 파일 파싱 (확장자 분기) — executor에서 실행
             loop = asyncio.get_running_loop()
-            
+
             if suffix == '.pdf':
-                doc = await loop.run_in_executor(None, self.pdf_parser.parse, tmp_path)
+                chunks = await loop.run_in_executor(
+                    None, self.pdf_parser.parse, tmp_path
+                )
+                tables = await loop.run_in_executor(
+                    None, self.pdf_parser.extract_tables, tmp_path
+                )
+
+                doc_hash = self._calculate_hash(tmp_path)
+                doc = RFPDocument(
+                    id=doc_hash,
+                    filename=file.filename,
+                    file_path=tmp_path,
+                    doc_hash=doc_hash,
+                    chunks=chunks,
+                    tables=tables,
+                    status="READY"
+                )
             elif suffix == '.hwp':
                 if not self.hwp_parser:
                     raise ValueError("HWP parsing is not supported (HWPParser module not found).")
                 chunks = await loop.run_in_executor(None, self.hwp_parser.parse, tmp_path)
-                
+
                 doc_hash = self._calculate_hash(tmp_path)
                 doc = RFPDocument(
                     id=doc_hash,
@@ -62,22 +77,22 @@ class IngestService:
 
             doc.filename = file.filename
 
-            # 3. 저장소 레지스트리 및 매니저 초기화
-            registry = StorageRegistry()
-            store = DocumentStore(user_id=user_id, registry=registry)
-            vector_manager = VectorStoreManager(user_id=user_id, registry=registry)
+            # 3. 저장 및 벡터 인덱싱 — executor에서 실행 (이벤트 루프 차단 방지)
+            def _save_and_ingest():
+                from bidflow.ingest.storage import DocumentStore, VectorStoreManager, StorageRegistry
+                registry = StorageRegistry()
+                store = DocumentStore(user_id=user_id, registry=registry)
+                store.save_document(doc)
 
-            # 4. 메타데이터 저장 (JSON 등)
-            store.save_document(doc)
+                try:
+                    vector_manager = VectorStoreManager(user_id=user_id, registry=registry)
+                    vector_manager.ingest_document(doc)
+                except Exception as e:
+                    print(f"[WARNING] VectorDB ingestion failed: {e}")
 
-            # 5. 벡터 DB 인덱싱 (실패해도 메타데이터 저장은 유지하거나, 필요시 롤백 로직 추가)
-            try:
-                vector_manager.ingest_document(doc)
-            except Exception as e:
-                print(f"[WARNING] VectorDB ingestion failed: {e}")
+            await loop.run_in_executor(None, _save_and_ingest)
 
             return doc
         finally:
-            # 6. 임시 파일 정리
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)

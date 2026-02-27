@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { apiUrl } from '@/lib/api';
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  apiUrl,
+  clearAuthToken,
+  getAuthTokenServerSnapshot,
+  getAuthTokenSnapshot,
+  subscribeAuthToken,
+} from "@/lib/api";
 
 interface Reply {
   id: string;
@@ -26,48 +32,70 @@ export default function CommentSection({ docHash }: { docHash: string }) {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string>("");
+  const token = useSyncExternalStore(
+    subscribeAuthToken,
+    getAuthTokenSnapshot,
+    getAuthTokenServerSnapshot
+  );
+  const visibleComments = token && docHash ? comments : [];
+  const currentUserId = token ? currentUser : "";
 
-  useEffect(() => {
-    fetchComments();
-    fetchCurrentUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docHash]);
-
-  const fetchCurrentUser = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+  const fetchCurrentUser = useCallback(async (authToken: string, signal?: AbortSignal) => {
     try {
       const res = await fetch(apiUrl("/auth/me"), {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authToken}` },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
         setCurrentUser(data.username);
+      } else if (res.status === 401) {
+        clearAuthToken();
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      console.warn("CommentSection: 사용자 정보를 불러오지 못했습니다.");
     }
-  };
+  }, []);
 
-  const fetchComments = async () => {
-    const token = localStorage.getItem("token");
-    if (!token || !docHash) return;
+  const fetchComments = useCallback(async (authToken: string, signal?: AbortSignal) => {
+    if (!docHash) return;
     try {
       const res = await fetch(apiUrl(`/api/v1/comments/${docHash}`), {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${authToken}` },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
         setComments(data);
+      } else if (res.status === 401) {
+        clearAuthToken();
       }
-    } catch (e) {
-      console.error("Failed to fetch comments", e);
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      console.warn("CommentSection: 댓글을 불러오지 못했습니다.");
     }
-  };
+  }, [docHash]);
+
+  useEffect(() => {
+    if (!token || !docHash) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const fetchAll = async () => {
+      await Promise.all([
+        fetchComments(token, controller.signal),
+        fetchCurrentUser(token, controller.signal),
+      ]);
+    };
+
+    void fetchAll();
+    return () => controller.abort();
+  }, [docHash, fetchComments, fetchCurrentUser, token]);
 
   const handleSubmitComment = async () => {
     if (!newComment.trim()) return;
-    const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
@@ -81,20 +109,23 @@ export default function CommentSection({ docHash }: { docHash: string }) {
       });
       if (res.ok) {
         setNewComment("");
-        fetchComments();
+        await fetchComments(token);
       } else {
+        if (res.status === 401) {
+          clearAuthToken();
+          return;
+        }
         const err = await res.json();
         alert(err.detail || "댓글 작성 실패");
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      console.warn("CommentSection: 댓글 작성 요청에 실패했습니다.");
     }
   };
 
   const handleSubmitReply = async (commentId: string) => {
     const text = replyText[commentId];
     if (!text?.trim()) return;
-    const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
@@ -109,16 +140,17 @@ export default function CommentSection({ docHash }: { docHash: string }) {
       if (res.ok) {
         setReplyText({ ...replyText, [commentId]: "" });
         setActiveReplyId(null);
-        fetchComments();
+        await fetchComments(token);
+      } else if (res.status === 401) {
+        clearAuthToken();
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      console.warn("CommentSection: 답글 작성 요청에 실패했습니다.");
     }
   };
 
   const handleDelete = async (id: string, type: 'comments' | 'replies') => {
     if (!confirm("정말 삭제하시겠습니까?")) return;
-    const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
@@ -127,24 +159,26 @@ export default function CommentSection({ docHash }: { docHash: string }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        fetchComments();
+        await fetchComments(token);
+      } else if (res.status === 401) {
+        clearAuthToken();
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      console.warn("CommentSection: 삭제 요청에 실패했습니다.");
     }
   };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-8">
       <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        💬 팀 의견 공유 <span className="text-sm font-normal text-gray-500">({comments.length})</span>
+        💬 팀 의견 공유 <span className="text-sm font-normal text-gray-500">({visibleComments.length})</span>
       </h3>
       
       <div className="space-y-6 mb-8">
-        {comments.length === 0 ? (
+        {visibleComments.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">아직 작성된 의견이 없습니다.</p>
         ) : (
-          comments.map((comment) => (
+          visibleComments.map((comment) => (
             <div key={comment.id} className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs shrink-0">
                 {comment.author_name[0]}
@@ -159,7 +193,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
                 </div>
                 <div className="flex gap-3 mt-1 ml-1 text-xs">
                   <button onClick={() => setActiveReplyId(activeReplyId === comment.id ? null : comment.id)} className="text-gray-500 hover:text-indigo-600 font-medium">답글 달기</button>
-                  {comment.author === currentUser && (
+                  {comment.author === currentUserId && (
                     <button onClick={() => handleDelete(comment.id, 'comments')} className="text-gray-500 hover:text-red-600">삭제</button>
                   )}
                 </div>
@@ -178,7 +212,7 @@ export default function CommentSection({ docHash }: { docHash: string }) {
                         </div>
                         <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{reply.text}</p>
                       </div>
-                      {reply.author === currentUser && (
+                      {reply.author === currentUserId && (
                         <button onClick={() => handleDelete(reply.id, 'replies')} className="text-xs text-gray-500 hover:text-red-600 mt-1 ml-1">삭제</button>
                       )}
                     </div>

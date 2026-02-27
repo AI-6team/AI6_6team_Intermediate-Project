@@ -16,7 +16,6 @@ export default function ProfilePage() {
   const [region, setRegion] = useState("");
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [licenseList, setLicenseList] = useState<string[]>([""]);
-  const [initialCompanyName, setInitialCompanyName] = useState("");
   const [initialRegion, setInitialRegion] = useState("");
   const [initialLicenses, setInitialLicenses] = useState("");
   const [initialCompanyLogo, setInitialCompanyLogo] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export default function ProfilePage() {
         setRole(data.role);
         setUserName(data.name);
         setCompanyName(data.team || "");
-        setInitialCompanyName(data.team || "");
         setRegion(data.region || "");
         setInitialRegion(data.region || "");
         setInitialLicenses(data.licenses || "");
@@ -80,7 +78,6 @@ export default function ProfilePage() {
 
   const currentLicensesStr = licenseList.filter(Boolean).join(", ");
   const isChanged =
-    companyName !== initialCompanyName ||
     region !== initialRegion ||
     currentLicensesStr !== initialLicenses ||
     (companyLogo || "") !== (initialCompanyLogo || "");
@@ -92,13 +89,11 @@ export default function ProfilePage() {
 
     try {
       const updatedUser = await updateUserProfile({
-        team: companyName,
         licenses: currentLicensesStr,
         region,
         company_logo: companyLogo || "",
       });
       setCompanyName(updatedUser.team || "");
-      setInitialCompanyName(updatedUser.team || "");
       setRegion(updatedUser.region || "");
       setInitialRegion(updatedUser.region || "");
       setInitialLicenses(updatedUser.licenses || "");
@@ -194,7 +189,7 @@ export default function ProfilePage() {
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {isReadOnly
                   ? "팀장만 회사 프로필을 수정할 수 있습니다. 아래는 현재 팀 프로필입니다."
-                  : "팀 이름과 보유 면허를 관리합니다. 이 정보는 자격 검증에 사용됩니다."}
+                  : "회사명은 가입 시 설정되며 변경할 수 없습니다. 보유 면허/지역/로고 정보는 수정할 수 있습니다."}
               </p>
             </div>
           </div>
@@ -212,7 +207,7 @@ export default function ProfilePage() {
                 {userName}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                {companyName || "팀 미소속"}
+                {companyName || "회사 미설정"}
               </div>
             </div>
           </div>
@@ -237,13 +232,13 @@ export default function ProfilePage() {
             </h2>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                회사명 (팀 이름)
+                회사명 (가입 시 설정, 변경 불가)
               </label>
               <input
                 type="text"
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                disabled={isReadOnly}
+                readOnly
+                disabled
                 className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm sm:text-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
               />
             </div>

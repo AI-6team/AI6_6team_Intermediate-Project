@@ -1,17 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiUrl } from "@/lib/api";
+import {
+  apiUrl,
+  clearAuthToken,
+  getAuthTokenServerSnapshot,
+  getAuthTokenSnapshot,
+  setAuthToken,
+  subscribeAuthToken,
+} from "@/lib/api";
 
 export default function HomePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return Boolean(localStorage.getItem("token"));
-  });
+  const authToken = useSyncExternalStore(
+    subscribeAuthToken,
+    getAuthTokenSnapshot,
+    getAuthTokenServerSnapshot
+  );
+  const isLoggedIn = Boolean(authToken);
 
   // 로그인 상태
   const [loginId, setLoginId] = useState("");
@@ -27,8 +36,7 @@ export default function HomePage() {
   const [regPw2, setRegPw2] = useState("");
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
+    clearAuthToken();
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -48,8 +56,7 @@ export default function HomePage() {
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem("token", data.access_token); // 토큰 저장
-        setIsLoggedIn(true);
+        setAuthToken(data.access_token);
         router.push("/dashboard");
       } else {
         const err = await response.json();
@@ -86,7 +93,7 @@ export default function HomePage() {
     }
 
     if (regTeam && !/^[a-zA-Z0-9_가-힣]+$/.test(regTeam)) {
-      alert("팀명은 영문, 숫자, 밑줄, 한글만 사용할 수 있습니다.");
+      alert("회사명은 영문, 숫자, 밑줄, 한글만 사용할 수 있습니다.");
       return;
     }
 
@@ -231,8 +238,8 @@ export default function HomePage() {
                       <input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500" placeholder="user@example.com" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">소속 팀</label>
-                      <input type="text" value={regTeam} onChange={(e) => setRegTeam(e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500" placeholder="예: AI6_team1" />
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">회사명</label>
+                      <input type="text" value={regTeam} onChange={(e) => setRegTeam(e.target.value)} className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500" placeholder="예: 비드플로우" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">역할</label>
