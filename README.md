@@ -367,13 +367,23 @@ pytest tests/security -q
 - 단일화 실행 기록: [docs/planning/next_fastapi_unification_execution_2026-02-26.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/docs/planning/next_fastapi_unification_execution_2026-02-26.md)
 - 보안 아키텍처: [src/bidflow/security/README.md](https://github.com/AI-6team/AI6_6team_Intermediate-Project/blob/main/src/bidflow/security/README.md)
 
-## 13) 데이터/보안 정책
+## 13) 협업일지 (Collaboration Logs)
+
+팀원별 Daily 협업일지: [`collaboration_logs/`](collaboration_logs/)
+
+| 팀원 | 폴더 | 파일 수 | 형식 |
+|---|---|---|---|
+| 임창현 | [`ImChangHyun/`](collaboration_logs/ImChangHyun/) | 9건 (02/03~02/27) | Markdown |
+| 김보윤 | [`KimBoYun/`](collaboration_logs/KimBoYun/) | 1건 (전체 일자 통합) | Markdown |
+| 김슬기 | [`KimSeulGi/`](collaboration_logs/KimSeulGi/) | 10건 (02/03~02/27) | PDF |
+
+## 14) 데이터/보안 정책
 
 - `data/raw` 원본 데이터셋은 GitHub 업로드 금지
 - `local_only/`는 개인 메모/핸드오프 보관용으로 Git 제외
 - 사용자 문서와 벡터 데이터는 기본적으로 사용자/팀 경계 내에서만 조회
 
-## 14) Roadmap
+## 15) Roadmap
 
 | 우선순위 | 항목 | 설명 |
 |:---:|---|---|
@@ -386,7 +396,7 @@ pytest tests/security -q
 
 > 상세 한계 분석 및 근거는 [종합 보고서 > 9. 한계와 다음 단계](docs/final_comprehensive_report.md#9-한계와-다음-단계) 참고
 
-## 15) Contributors
+## 16) Contributors
 
 | 이름 | 역할 |
 |---|---|

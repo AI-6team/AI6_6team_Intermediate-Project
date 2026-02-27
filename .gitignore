@@ -102,8 +102,8 @@ data/session.json
 # Notebook local data
 notebooks/data/
 
-# Collaboration logs (not needed for submission)
-협업일지/
+# Old Korean-named collaboration logs (migrated to collaboration_logs/)
+# 협업일지/
 
 # Local-only handoff/prompt archives
 local_only/
